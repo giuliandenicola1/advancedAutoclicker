@@ -163,34 +163,79 @@ class DelayPopupManager:
         """Create and show the confirmation popup"""
         if self.is_cancelled:
             return
-            
-        # Store delay for later use
+
         self._current_delay_seconds = delay_seconds
-        
-        # Hide the main window
-        if self.parent_window:
-            self.parent_window.withdraw()
-            
-        self.popup_window = tk.Toplevel(self.parent_window)
-        self.popup_window.title("Autoclicker Confirmation")
-        # Increased height significantly to ensure buttons are always visible
-        window_height = 400 if delay_seconds > 0 else 350
-        window_width = 550
-        self.popup_window.geometry(f"{window_width}x{window_height}")  # Made wider and taller
-        self.popup_window.resizable(False, False)
-        
-        # Center the popup on screen
-        self.popup_window.update_idletasks()  # Update to get actual window size
-        screen_width = self.popup_window.winfo_screenwidth()
-        screen_height = self.popup_window.winfo_screenheight()
-        x = (screen_width - window_width) // 2
-        y = (screen_height - window_height) // 2
-        self.popup_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
-        
-        # Make popup modal and on top
-        self.popup_window.transient(self.parent_window)
-        self.popup_window.grab_set()
-        self.popup_window.attributes('-topmost', True)
+
+        try:
+            # Create popup first
+            popup = tk.Toplevel(self.parent_window)
+            self.popup_window = popup
+            popup.title("Autoclicker Confirmation")
+            window_height = 400 if delay_seconds > 0 else 350
+            window_width = 550
+            popup.geometry(f"{window_width}x{window_height}")
+            popup.resizable(False, False)
+
+            # Center
+            popup.update_idletasks()
+            sw, sh = popup.winfo_screenwidth(), popup.winfo_screenheight()
+            x = (sw - window_width) // 2
+            y = (sh - window_height) // 2
+            popup.geometry(f"{window_width}x{window_height}+{x}+{y}")
+
+            # Modal / topmost
+            popup.transient(self.parent_window)
+            popup.grab_set()
+            try:
+                popup.attributes('-topmost', True)
+            except Exception:
+                pass
+            popup.lift()
+            try:
+                popup.focus_force()
+            except Exception:
+                pass
+
+            # Hide main window only after popup shown
+            if self.parent_window:
+                try:
+                    self.parent_window.withdraw()
+                except Exception:
+                    pass
+
+            # Fallback: if popup not visible after 300ms, restore main window
+            def _fallback_visibility():
+                try:
+                    if self.is_cancelled:
+                        return
+                    if not popup.winfo_exists():
+                        return
+                    if not popup.winfo_viewable():
+                        print("[DelayPopup] Popup not viewable; restoring main window.")
+                        if self.parent_window:
+                            try:
+                                self.parent_window.deiconify()
+                                self.parent_window.lift()
+                            except Exception:
+                                pass
+                        try:
+                            popup.deiconify()
+                            popup.lift()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            popup.after(300, _fallback_visibility)
+        except Exception as e:
+            print(f"[DelayPopup] Failed to create popup: {e}")
+            # Ensure main window visible if popup fails
+            if self.parent_window:
+                try:
+                    self.parent_window.deiconify()
+                    self.parent_window.lift()
+                except Exception:
+                    pass
+            return
         
         # Create popup content
         main_frame = tk.Frame(self.popup_window, padx=20, pady=20)
@@ -271,6 +316,20 @@ class DelayPopupManager:
             timeout_ms = 10000  # 10 seconds for no-delay situations
             self.popup_window.after(timeout_ms, self._auto_close_popup)
         # If there's a delay, let the user decide (no auto-close)
+        
+        # Fallback: ensure popup visible shortly after
+        def _visibility_guard():
+            try:
+                if self.popup_window and not self.is_cancelled:
+                    # If for some reason it lost topmost, reassert
+                    try:
+                        self.popup_window.attributes('-topmost', True)
+                        self.popup_window.lift()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        self.popup_window.after(250, _visibility_guard)
         
     def _on_proceed_clicked(self) -> None:
         """Handle proceed button click - skip countdown and execute immediately"""

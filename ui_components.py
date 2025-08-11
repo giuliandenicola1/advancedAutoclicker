@@ -600,16 +600,10 @@ class UIComponentsMixin:
     def _on_delay_change(self, event=None):
         """Handle delay field changes to update popup checkbox state."""
         try:
-            delay_val = int(self.delay.get()) if self.delay.get().isdigit() else 0
-            if delay_val == 0:
-                # Disable popup checkbox when delay is 0
-                self.popup_checkbox.configure(state='disabled')
-                # Optionally hide it completely
-                # self.popup_checkbox.grid_remove()
-            else:
-                # Enable popup checkbox when delay > 0
-                self.popup_checkbox.configure(state='normal')
-                # self.popup_checkbox.grid()
+            # Validate numeric input (side-effect only); keep popup enabled regardless of delay
+            _ = int(self.delay.get()) if self.delay.get().isdigit() else 0
+            # Always keep popup enabled; zero delay just means immediate confirmation possible
+            self.popup_checkbox.configure(state='normal')
         except ValueError:
             # Handle invalid input gracefully
             pass

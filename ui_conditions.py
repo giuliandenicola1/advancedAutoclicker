@@ -350,109 +350,16 @@ class UIConditionsMixin:
             return logic.upper()
             
     def edit_condition(self):
-        """Edit selected condition"""
+        """Edit selected standalone condition via unified dialog"""
         selection = self.conditions_listbox.curselection()
         if not selection:
             messagebox.showwarning("No Selection", "Please select a condition to edit.")
             return
-            
         index = selection[0]
         if index >= len(self.conditions):
             messagebox.showerror("Error", "Invalid condition selected.")
             return
-            
-        condition_to_edit = self.conditions[index]
-        
-        # Create edit dialog
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Edit Condition")
-        dialog.minsize(500, 400)
-        dialog.transient(self.root)
-        dialog.grab_set()
-        
-        # Center the dialog
-        self.center_window(dialog, 500, 400)
-        
-        # Configure grid
-        dialog.columnconfigure(0, weight=1)
-        dialog.columnconfigure(1, weight=2)
-        
-        # Type
-        ttk.Label(dialog, text="Type:").grid(row=0, column=0, padx=10, pady=10, sticky=tk.W)
-        
-        type_var = tk.StringVar(value=condition_to_edit.type)
-        type_frame = ttk.Frame(dialog)
-        type_frame.grid(row=0, column=1, padx=10, pady=10, sticky=(tk.W, tk.E))
-        ttk.Radiobutton(type_frame, text="Color", variable=type_var, value="color").pack(side=tk.LEFT, padx=10)
-        ttk.Radiobutton(type_frame, text="Text", variable=type_var, value="text").pack(side=tk.LEFT, padx=10)
-        
-        # Position (display only, can't edit position)
-        ttk.Label(dialog, text="Position:").grid(row=1, column=0, padx=10, pady=10, sticky=tk.W)
-        
-        if len(condition_to_edit.position) == 4:
-            x1, y1, x2, y2 = condition_to_edit.position
-            position_text = f"Area: ({x1}, {y1}) to ({x2}, {y2})"
-        else:
-            position_text = f"Point: ({condition_to_edit.position[0]}, {condition_to_edit.position[1]})"
-            
-        ttk.Label(dialog, text=position_text).grid(row=1, column=1, padx=10, pady=10, sticky=tk.W)
-        
-        # Value
-        ttk.Label(dialog, text="Value:").grid(row=2, column=0, padx=10, pady=10, sticky=tk.W)
-        
-        value_var = tk.StringVar()
-        if condition_to_edit.type == "color":
-            value_var.set(f"RGB{condition_to_edit.value}")
-            ttk.Label(dialog, textvariable=value_var).grid(row=2, column=1, padx=10, pady=10, sticky=tk.W)
-        else:
-            value_var.set(condition_to_edit.value)
-            ttk.Entry(dialog, textvariable=value_var).grid(row=2, column=1, padx=10, pady=10, sticky=(tk.W, tk.E))
-        
-        # Comparator
-        ttk.Label(dialog, text="Comparator:").grid(row=3, column=0, padx=10, pady=10, sticky=tk.W)
-        
-        comparator_var = tk.StringVar(value=condition_to_edit.comparator)
-        comparator_options = ['equals', 'contains', 'similar']
-        comparator_combo = ttk.Combobox(dialog, textvariable=comparator_var, values=comparator_options, state='readonly')
-        comparator_combo.grid(row=3, column=1, padx=10, pady=10, sticky=(tk.W, tk.E))
-        
-        # Tolerance (for color)
-        ttk.Label(dialog, text="Tolerance:").grid(row=4, column=0, padx=10, pady=10, sticky=tk.W)
-        
-        tolerance_var = tk.IntVar(value=condition_to_edit.tolerance if condition_to_edit.tolerance else 10)
-        tolerance_scale = ttk.Scale(dialog, from_=0, to=50, orient=tk.HORIZONTAL, variable=tolerance_var)
-        tolerance_scale.grid(row=4, column=1, padx=10, pady=10, sticky=(tk.W, tk.E))
-        ttk.Label(dialog, textvariable=tolerance_var).grid(row=4, column=2, padx=5, pady=10, sticky=tk.W)
-        
-        # Save function
-        def save_edited_condition():
-            try:
-                # Update the condition
-                condition_to_edit.type = type_var.get()
-                condition_to_edit.comparator = comparator_var.get()
-                condition_to_edit.tolerance = tolerance_var.get()
-                if condition_to_edit.type == "text":
-                    condition_to_edit.value = value_var.get()
-                
-                # Update display
-                self.update_conditions_display()
-                dialog.destroy()
-                
-                self.logger.log_action("EDIT_CONDITION", {
-                    "type": condition_to_edit.type,
-                    "comparator": condition_to_edit.comparator,
-                    "tolerance": condition_to_edit.tolerance
-                }, success=True)
-                
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to save condition: {e}")
-            
-        # Add buttons
-        ttk.Button(dialog, text="Cancel", 
-                  command=dialog.destroy).grid(row=5, column=0, padx=10, pady=20)
-                  
-        ttk.Button(dialog, text="Save Changes", 
-                  command=save_edited_condition).grid(row=5, column=1, padx=10, pady=20)
+        self._open_condition_edit_dialog(self.conditions[index])
         
     def remove_condition(self):
         """Remove selected condition"""
@@ -667,19 +574,128 @@ class UIConditionsMixin:
     
     def edit_specific_condition(self, condition):
         """Edit a specific condition object"""
-        # Find the condition in the main list to get its index
-        found = False
-        for i, main_condition in enumerate(self.conditions):
-            if self._conditions_equal(condition, main_condition):
-                # Temporarily set selection and call edit
-                self.conditions_listbox.selection_clear(0, tk.END)
-                self.conditions_listbox.selection_set(i)
-                self.edit_condition()
-                found = True
-                break
-                
-        if found:
-            return
-        else:
-            # Handle group conditions differently if needed
-            messagebox.showinfo("Edit Condition", "Group condition editing not yet implemented.")
+        try:
+            # Launch a unified edit dialog regardless of standalone or group
+            self._open_condition_edit_dialog(condition)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open edit dialog: {e}")
+
+    def _open_condition_edit_dialog(self, condition_to_edit: Condition):
+        """Open edit dialog allowing position & value changes (no type switching)."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Edit Condition")
+        dialog.minsize(520, 430)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        self.center_window(dialog, 520, 430)
+
+        dialog.columnconfigure(0, weight=1)
+        dialog.columnconfigure(1, weight=2)
+
+        # Type (fixed - cannot change)
+        ttk.Label(dialog, text="Type:").grid(row=0, column=0, padx=10, pady=10, sticky=tk.W)
+        ttk.Label(dialog, text=condition_to_edit.type.capitalize()).grid(row=0, column=1, padx=10, pady=10, sticky=tk.W)
+
+        # Position section with reselect buttons
+        ttk.Label(dialog, text="Position / Area:").grid(row=1, column=0, padx=10, pady=10, sticky=tk.W)
+        position_var = tk.StringVar()
+        def _set_position_text():
+            if len(condition_to_edit.position) == 4:
+                x1, y1, x2, y2 = condition_to_edit.position
+                w, h = x2 - x1, y2 - y1
+                position_var.set(f"Area: ({x1},{y1}) → ({x2},{y2}) [{w}x{h}]")
+            else:
+                position_var.set(f"Point: ({condition_to_edit.position[0]}, {condition_to_edit.position[1]})")
+        _set_position_text()
+        pos_frame = ttk.Frame(dialog)
+        pos_frame.grid(row=1, column=1, padx=10, pady=10, sticky=(tk.W, tk.E))
+        ttk.Label(pos_frame, textvariable=position_var).pack(anchor=tk.W)
+        btns = ttk.Frame(pos_frame)
+        btns.pack(anchor=tk.W, pady=4)
+        def _reselect_point():
+            dialog.withdraw()
+            try:
+                messagebox.showinfo("Reselect Point", "Move mouse to desired point then click OK.")
+                new_pos = pyautogui.position()
+                # Keep value unchanged
+                condition_to_edit.position = (new_pos.x, new_pos.y)
+                _set_position_text()
+            finally:
+                dialog.deiconify()
+        def _reselect_area():
+            dialog.withdraw()
+            try:
+                messagebox.showinfo("Reselect Area", "Select TOP-LEFT corner then click OK.")
+                p1 = pyautogui.position()
+                messagebox.showinfo("Reselect Area", "Select BOTTOM-RIGHT corner then click OK.")
+                p2 = pyautogui.position()
+                x1, y1 = min(p1.x, p2.x), min(p1.y, p2.y)
+                x2, y2 = max(p1.x, p2.x), max(p1.y, p2.y)
+                condition_to_edit.position = (x1, y1, x2, y2)
+                _set_position_text()
+            finally:
+                dialog.deiconify()
+        ttk.Button(btns, text="Reselect Point", command=_reselect_point).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btns, text="Reselect Area", command=_reselect_area).pack(side=tk.LEFT, padx=2)
+
+        # Value editing
+        ttk.Label(dialog, text="Value:").grid(row=2, column=0, padx=10, pady=10, sticky=tk.W)
+        if condition_to_edit.type == 'color':
+            color_var = tk.StringVar(value=f"RGB{condition_to_edit.value[:3]}")
+            color_label = ttk.Label(dialog, textvariable=color_var)
+            color_label.grid(row=2, column=1, padx=10, pady=10, sticky=tk.W)
+            def _re_pick_color():
+                dialog.withdraw()
+                try:
+                    messagebox.showinfo("Pick Color", "Move mouse over target color then click OK.")
+                    pos = pyautogui.position()
+                    screenshot = pyautogui.screenshot()
+                    pixel_color = screenshot.getpixel(pos)[:3]
+                    condition_to_edit.value = pixel_color
+                    color_var.set(f"RGB{pixel_color}")
+                finally:
+                    dialog.deiconify()
+            ttk.Button(dialog, text="Pick New Color", command=_re_pick_color).grid(row=2, column=2, padx=5, pady=10)
+        else:  # text
+            text_var = tk.StringVar(value=condition_to_edit.value)
+            ttk.Entry(dialog, textvariable=text_var).grid(row=2, column=1, padx=10, pady=10, sticky=(tk.W, tk.E))
+
+        # Comparator
+        ttk.Label(dialog, text="Comparator:").grid(row=3, column=0, padx=10, pady=10, sticky=tk.W)
+        comparator_var = tk.StringVar(value=condition_to_edit.comparator)
+        comp_options = ['equals', 'contains', 'similar'] if condition_to_edit.type == 'color' else ['equals', 'contains']
+        comparator_combo = ttk.Combobox(dialog, textvariable=comparator_var, values=comp_options, state='readonly')
+        comparator_combo.grid(row=3, column=1, padx=10, pady=10, sticky=(tk.W, tk.E))
+
+        # Tolerance for color
+        ttk.Label(dialog, text="Tolerance:").grid(row=4, column=0, padx=10, pady=10, sticky=tk.W)
+        tolerance_var = tk.IntVar(value=condition_to_edit.tolerance if condition_to_edit.tolerance else 10)
+        tol_scale = ttk.Scale(dialog, from_=0, to=50, orient=tk.HORIZONTAL, variable=tolerance_var)
+        tol_scale.grid(row=4, column=1, padx=10, pady=10, sticky=(tk.W, tk.E))
+        ttk.Label(dialog, textvariable=tolerance_var).grid(row=4, column=2, padx=5, pady=10, sticky=tk.W)
+        if condition_to_edit.type != 'color':
+            tol_scale.state(['disabled'])
+
+        def _save():
+            try:
+                condition_to_edit.comparator = comparator_var.get()
+                if condition_to_edit.type == 'color':
+                    # value already set if changed
+                    pass
+                else:
+                    condition_to_edit.value = text_var.get()
+                condition_to_edit.tolerance = tolerance_var.get() if condition_to_edit.type == 'color' else condition_to_edit.tolerance
+                self.update_conditions_display()
+                dialog.destroy()
+                self.logger.log_action("EDIT_CONDITION", {
+                    "type": condition_to_edit.type,
+                    "position": condition_to_edit.position,
+                    "value": str(condition_to_edit.value),
+                    "comparator": condition_to_edit.comparator,
+                    "tolerance": condition_to_edit.tolerance
+                }, success=True)
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save: {e}")
+
+        ttk.Button(dialog, text="Cancel", command=dialog.destroy).grid(row=5, column=0, padx=10, pady=20)
+        ttk.Button(dialog, text="Save Changes", command=_save).grid(row=5, column=1, padx=10, pady=20, sticky=tk.W)

@@ -6,6 +6,7 @@ from config import Config
 from delay_popup import DelayPopupManager
 from clicker import MouseClicker
 from logger import get_logger
+from diagnostics import run_startup_diagnostics
 
 # Import our modular UI components
 from ui_components import UIComponentsMixin
@@ -39,8 +40,13 @@ class ModernAutoclickerUI(UIComponentsMixin, UIConditionsMixin, UIGroupsMixin,
     """
     
     def __init__(self):
-        # Create root window first
+        # Create root window first + splash
         self.root = tk.Tk()
+        self.splash = tk.Toplevel(self.root)
+        self.splash.title("Starting...")
+        self.splash.geometry("260x90")
+        tk.Label(self.splash, text="Advanced Autoclicker\nInitializing...", font=("Helvetica", 12)).pack(expand=True)
+        self.splash.update_idletasks()
 
         # Apply a modern theme if ttkbootstrap is available
         self.style = None
@@ -69,6 +75,11 @@ class ModernAutoclickerUI(UIComponentsMixin, UIConditionsMixin, UIGroupsMixin,
         # Initialize logger
         self.logger = get_logger()
         self.logger.log_info("Modern Autoclicker UI initialized", "ui")
+        # Extended startup diagnostics (best-effort)
+        try:
+            run_startup_diagnostics(self.logger)
+        except Exception as e:  # pragma: no cover
+            self.logger.log_warning(f"Diagnostics failed: {e}", "diagnostics")
 
         # Initialize core components
         self.config = Config(rules=[])
@@ -96,6 +107,22 @@ class ModernAutoclickerUI(UIComponentsMixin, UIConditionsMixin, UIGroupsMixin,
 
         # Set up the modern UI
         self.setup_ui()
+
+        # Force visibility / focus after UI built
+        try:
+            self.root.update_idletasks()
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+        except Exception:
+            pass
+
+        # Destroy splash once UI ready
+        try:
+            if self.splash and self.splash.winfo_exists():
+                self.splash.destroy()
+        except Exception:
+            pass
         
         # Size window to content and center it
         self.size_window_to_content()

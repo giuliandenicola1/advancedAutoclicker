@@ -4,12 +4,15 @@ Autoclicker main entry point with AC-3 delay/popup functionality
 """
 import sys
 from ui import AutoclickerUI
+from permission_preflight import run_permission_preflight
 
 
 def main():
     """Main entry point for the autoclicker application"""
     try:
         print("Starting Autoclicker with AC-3 Delay/Popup functionality...")
+        # Trigger macOS permission prompts early (no-op on other platforms)
+        run_permission_preflight()
         app = AutoclickerUI()
         app.run()
     except KeyboardInterrupt:

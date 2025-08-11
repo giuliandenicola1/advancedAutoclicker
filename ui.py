@@ -103,6 +103,40 @@ class AutoclickerUI:
         self.config_name_var = tk.StringVar()  # Optional config name
 
         self.setup_ui()
+
+        # Perform early permission checks (macOS screen recording & accessibility)
+        self.check_and_request_permissions()
+        
+    def check_and_request_permissions(self):
+        """Attempt to trigger macOS permission prompts early and warn user if missing.
+        (Non-blocking best-effort – true granting must be done by user in System Settings.)"""
+        import sys
+        if sys.platform != 'darwin':
+            return
+        try:
+            # Attempt a tiny screenshot to trigger Screen Recording permission prompt (if not already granted)
+            img = pyautogui.screenshot()
+            # Basic heuristic: if screenshot is uniformly black it could indicate missing permission
+            # (Not definitive, but useful hint.)
+            extrema = img.getextrema()
+            all_black = False
+            try:
+                # extrema can be list for multiband
+                all_black = all(ch[0] == 0 and ch[1] == 0 for ch in extrema)
+            except Exception:
+                pass
+            # Attempt a benign position read to trigger Accessibility (control) permission
+            _ = pyautogui.position()
+            if all_black:
+                messagebox.showwarning(
+                    "Screen Recording Permission",
+                    "The captured screen appears blank. If this is the first run, please grant 'Screen Recording' permission to this app (Python) in System Settings > Privacy & Security > Screen Recording, then restart the app."
+                )
+        except Exception as e:
+            messagebox.showwarning(
+                "Permissions Required",
+                f"Unable to capture the screen or read mouse position.\nPlease grant BOTH 'Screen Recording' and 'Accessibility' permissions to Python in System Settings > Privacy & Security.\nError: {e}"
+            )
         
     def setup_ui(self):
         # Create a menu bar
@@ -1110,12 +1144,17 @@ class AutoclickerUI:
         delay_seconds = self.config.delay
         show_popup = self.config.popup
         
-        # Override popup setting: don't show popup if delay is 0
-        if delay_seconds == 0:
-            show_popup = False
-            self.status_label.config(text="🎯 Rule matched! Executing immediately...")
+        # Always allow popup even with zero delay (acts as immediate confirmation dialog)
+        if show_popup:
+            if delay_seconds > 0:
+                self.status_label.config(text="🎯 Rule matched! Showing confirmation & countdown...")
+            else:
+                self.status_label.config(text="🎯 Rule matched! Awaiting user confirmation...")
         else:
-            self.status_label.config(text="🎯 Rule matched! Showing confirmation...")
+            if delay_seconds > 0:
+                self.status_label.config(text=f"🎯 Rule matched! Waiting {delay_seconds}s before executing...")
+            else:
+                self.status_label.config(text="🎯 Rule matched! Executing immediately...")
         
         # Create rule info string for display
         if hasattr(rule, 'condition_groups') and rule.condition_groups:
@@ -1503,7 +1542,7 @@ class AutoclickerUI:
         # Save main settings
         delay_val = int(self.delay.get()) if hasattr(self, 'delay') and self.delay.get().isdigit() else 0
         popup_val = self.popup_var.get() if hasattr(self, 'popup_var') else True
-        click_type_val = self.click_type.get() if hasattr(self, 'click_type') else 'single'
+    # click_type retrieval kept inline where needed; removed unused temporary variable
 
         # Create the rule, everything is nested in groups
         rule = Rule(

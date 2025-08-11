@@ -1,7 +1,10 @@
 +++ requirements.txt
 @@ -0,0 +1,5 @@
-+pyautogui>=0.9.54
-+pillow>=9.0.0
-+opencv-python>=4.5.0
-+pytesseract>=0.3.0
-+numpy>=1.21.0
+pyautogui>=0.9.54
+pillow>=9.0.0
+opencv-python>=4.5.0
+pytesseract>=0.3.0
+numpy>=1.21.0
+ttkbootstrap>=1.10.1; platform_system == 'Darwin' or platform_system == 'Windows'
+pyinstaller>=6.0.0
+py2app>=0.28; platform_system == 'Darwin'

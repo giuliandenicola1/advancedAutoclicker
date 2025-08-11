@@ -7,6 +7,8 @@ import datetime
 from typing import Optional, List
 from pathlib import Path
 import threading
+import os
+import platform
 
 
 class AutoclickerLogger:
@@ -19,7 +21,20 @@ class AutoclickerLogger:
         Args:
             log_dir: Directory to store log files
         """
-        self.log_dir = Path(log_dir)
+        # If default 'logs', relocate to user path for packaged builds to avoid
+        # permission / CWD issues. macOS: ~/Library/Logs/AdvancedAutoclicker
+        # Windows: %AppData%/AdvancedAutoclicker/logs
+        if log_dir == "logs":
+            system = platform.system()
+            if system == "Darwin":
+                base = Path.home()/"Library"/"Logs"/"AdvancedAutoclicker"
+            elif system == "Windows":
+                base = Path(os.environ.get("APPDATA", Path.home()))/"AdvancedAutoclicker"/"logs"
+            else:
+                base = Path.home()/".advanced_autoclicker"/"logs"
+            self.log_dir = base
+        else:
+            self.log_dir = Path(log_dir)
         self.log_dir.mkdir(exist_ok=True)
         
         # Create log files
@@ -35,6 +50,20 @@ class AutoclickerLogger:
         
         # Start session
         self.log_info("=== Autoclicker Session Started ===")
+        self._start_heartbeat()
+
+    def _start_heartbeat(self):
+        """Start a background thread to write heartbeat lines so we see if UI loop stalls."""
+        def beat():  # pragma: no cover - timing thread
+            while True:
+                try:
+                    self.log_debug("heartbeat", "hb")
+                except Exception:
+                    pass
+                import time
+                time.sleep(30)
+        t = threading.Thread(target=beat, name="log-heartbeat", daemon=True)
+        t.start()
         
     def _setup_loggers(self):
         """Setup different loggers for different purposes"""
