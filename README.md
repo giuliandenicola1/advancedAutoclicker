@@ -1,62 +1,121 @@
-# Copilot Auto Continue
+# Advanced Autoclicker
 
-This extension automatically clicks 'Continue' in Copilot Chat when specified terminal prompts are detected.
+An advanced, modular desktop autoclicker that can monitor multiple screen positions and only click when user‑defined condition sets (ALL or ANY logic) are satisfied. Supports complex condition groups, color / pixel / area checks, delayed start, and real‑time monitoring with logs.
 
-## Features
-- Monitors terminal output for user-configurable prompts.
-- If a configured prompt is detected, it will (in future) automatically trigger the Copilot Chat 'Continue' action.
-- Prompts are configurable via `copilotAutoContinue.allowedPrompts` in your VS Code settings.
+> Attribution: This codebase (application logic, UI structure, build scripts, and packaging configuration) was fully authored with the assistance of AI.
 
-## Configuration
-Add your allowed prompts in your settings.json:
+## Key Features
+- Multiple independent click conditions (color match, position, area, etc.)
+- Condition groups with ALL / ANY logic
+- Real‑time monitoring & activity logs (separate action / error / startup logs)
+- Configurable delays & controlled start/stop
+- Modular Tk / ttkbootstrap modern UI (tabbed, resizable, splash screen)
+- Cross‑platform build setup (macOS & Windows) using PyInstaller
+- Optional macOS app bundle via py2app
 
+## Project Layout (Essentials)
+- `modern_main.py` – Packaged entrypoint (used by PyInstaller)
+- `new_ui.py` – Modern modular UI (mixins in `ui_*.py` files)
+- `clicker.py` – Core clicking logic
+- `detection.py` / `monitor.py` – Condition evaluation & monitoring helpers
+- `logger.py` – Centralized multi-file logging + heartbeat
+- `diagnostics.py` – Startup environment diagnostics
+- `AdvancedAutoclicker_Modern.spec` – PyInstaller spec
+- `scripts/make_app_icons.py` – Icon generation (.icns / .ico)
+- `requirements.txt` – Python dependencies
+
+## Prerequisites
+- Python 3.11+ (developed on 3.13)
+- macOS or Windows (Linux may work but not the packaging focus)
+- For macOS icon conversion (optional nicer .icns): Xcode Command Line Tools providing `iconutil`
+
+## Install Dependencies
+Create and activate a virtual environment (recommended):
+
+```bash
+python3 -m venv autoclicker_venv
+source autoclicker_venv/bin/activate  # Windows: autoclicker_venv\Scripts\activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
-"copilotAutoContinue.allowedPrompts": [
-	"Type 'continue' to proceed",
-	"Another prompt to match"
-]
+
+## Running From Source (Dev Mode)
+```bash
+source autoclicker_venv/bin/activate
+python modern_main.py
+```
+Logs are written to a per‑user directory (e.g. macOS: `~/Library/Logs/AdvancedAutoclicker`).
+
+## Building (PyInstaller)
+The spec file embeds the modern UI and optional icon assets generated into `build/icons`.
+
+1. (Optional) Regenerate icons from a base PNG placed at `scripts/base_icon.png` (name it or adjust script):
+	```bash
+	source autoclicker_venv/bin/activate
+	python scripts/make_app_icons.py
+	```
+2. Build the application:
+	```bash
+	source autoclicker_venv/bin/activate
+	pyinstaller --noconfirm AdvancedAutoclicker_Modern.spec
+	```
+3. Result:
+	- macOS: `dist/Advanced Autoclicker.app`
+	- Windows (run analogous command on Windows): `dist/Advanced Autoclicker/Advanced Autoclicker.exe`
+
+If the icon tool `iconutil` was not available, a fallback `.icns` containing a single size is created; install Xcode tools for better scaling:
+```bash
+xcode-select --install
 ```
 
-## Limitations
-- Currently, the extension only shows a notification when a prompt is detected. Automatic Copilot Chat interaction is planned.
+## Alternative macOS Build (py2app)
+```bash
+python setup_modern.py py2app -A   # alias build for dev
+python setup_modern.py py2app      # full optimized bundle
+```
+Output appears under `dist/Advanced Autoclicker.app`.
 
-## Requirements
-- VS Code 1.87.0 or later.
+## Windows Build Notes
+On Windows PowerShell / CMD (after cloning repo):
+```powershell
+py -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+pyinstaller --noconfirm AdvancedAutoclicker_Modern.spec
+```
+Ensure `ttkbootstrap` is installed (it’s conditional in requirements; Windows satisfies condition).
 
-## Known Issues
-- The VS Code API does not yet provide a public way to programmatically click Copilot Chat buttons. This will be implemented as soon as the API allows.
+## Logging & Diagnostics
+At startup the app logs environment + frozen state. Heartbeat messages every 30s confirm liveness. Check:
+```
+macOS: ~/Library/Logs/AdvancedAutoclicker/
+Windows: %AppData%\AdvancedAutoclicker\Logs\
+```
+Files include `autoclicker.log`, `errors.log`, and `actions.log`.
 
-## Release Notes
-### 0.0.1
-- Initial release: terminal monitoring and prompt detection.
+## Customizing Conditions
+Within the UI you can add multiple condition rows and group them:
+1. Select a screen position / area / color sample.
+2. Define condition logic (e.g., color equals, area contains color, etc.).
+3. Group conditions and choose group logic (ALL or ANY) before enabling the autoclicker.
+4. Start monitoring; when active, a click triggers only when its group logic passes.
 
-### 1.0.1
+## Troubleshooting
+- No window on macOS first launch: ensure app is focused (we lift/focus programmatically) or check logs.
+- Icon blurry: regenerate icons with `iconutil` present.
+- Tesseract OCR features missing: install native Tesseract separately if required for advanced detection.
 
-Fixed issue #.
+## Roadmap Ideas
+- Configuration persistence (save/load rule sets)
+- Headless mode / CLI batch automation
+- Extended condition types (image similarity, template matching)
+- Auto update & code signing / notarization steps
 
-### 1.1.0
+## License
+Specify your chosen license here (MIT / Apache-2.0 / etc.).
 
-Added features X, Y, and Z.
+## Attribution Reminder
+This project was fully authored with AI assistance (design, code, docs). Review and validate before production use.
 
 ---
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+Happy automating!
