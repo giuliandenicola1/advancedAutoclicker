@@ -13,6 +13,19 @@ An advanced, modular desktop autoclicker that can monitor multiple screen positi
 - Cross‑platform build setup (macOS & Windows) using PyInstaller
 - Optional macOS app bundle via py2app
 
+## Screenshots
+Configuration & rule builder:
+
+![Configuration UI](docs/images/screenshot_config.png)
+
+Confirmation popup during countdown & execution (example) – add your own screenshot as `docs/images/screenshot_confirmation.png`:
+
+![Confirmation Popup](docs/images/screenshot_confirmation.png)
+
+Monitoring & logs tab (example) – add your own screenshot as `docs/images/screenshot_logs.png`:
+
+![Monitoring & Logs](docs/images/screenshot_logs.png)
+
 ## Project Layout (Essentials)
 - `modern_main.py` – Packaged entrypoint (used by PyInstaller)
 - `new_ui.py` – Modern modular UI (mixins in `ui_*.py` files)

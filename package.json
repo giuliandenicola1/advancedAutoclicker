@@ -3,6 +3,10 @@
   "displayName": "Copilot Auto Continue",
   "description": "Automatically clicks 'Continue' in Copilot Chat when specified terminal prompts are detected.",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/giuliandenicola1/advancedAutoclicker.git"
+  },
   "engines": {
     "vscode": "^1.87.0"
   },
