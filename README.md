@@ -16,13 +16,13 @@ An advanced, modular desktop autoclicker that can monitor multiple screen positi
 ## Screenshots
 Configuration & rule builder:
 
-![Configuration UI](docs/images/screenshot_config.png)
+![Configuration UI](docs/images/screenshot_main.png)
 
-Confirmation popup during countdown & execution (example) – add your own screenshot as `docs/images/screenshot_confirmation.png`:
+Confirmation popup during countdown & execution:
 
 ![Confirmation Popup](docs/images/screenshot_confirmation.png)
 
-Monitoring & logs tab (example) – add your own screenshot as `docs/images/screenshot_logs.png`:
+Monitoring & logs tab:
 
 ![Monitoring & Logs](docs/images/screenshot_logs.png)
 
@@ -75,6 +75,22 @@ The spec file embeds the modern UI and optional icon assets generated into `buil
 3. Result:
 	- macOS: `dist/Advanced Autoclicker.app`
 	- Windows (run analogous command on Windows): `dist/Advanced Autoclicker/Advanced Autoclicker.exe`
+
+### Create macOS DMG (Distribution)
+After the `.app` exists you can package it into a DMG for an easier drag‑and‑drop install:
+
+```bash
+bash scripts/create_dmg.sh
+```
+Produces: `dist/AdvancedAutoclicker-macOS.dmg`
+
+Environment overrides:
+```bash
+APP_NAME="Advanced Autoclicker" DMG_NAME="AdvancedAutoclicker" bash scripts/create_dmg.sh
+```
+The script creates a staging folder with an `Applications` symlink for the common installer layout.
+
+> Optional (before DMG): codesign & notarize the app if you have a Developer ID certificate to avoid Gatekeeper warnings.
 
 If the icon tool `iconutil` was not available, a fallback `.icns` containing a single size is created; install Xcode tools for better scaling:
 ```bash
