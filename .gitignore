@@ -2,3 +2,6 @@ __pycache__/*
 logs/*
 build/*
 dist/*
+# macOS metadata files
+.DS_Store
+*/.DS_Store
