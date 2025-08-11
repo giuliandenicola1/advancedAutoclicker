@@ -13,42 +13,41 @@ import platform
 
 class AutoclickerLogger:
     """Centralized logging system for the autoclicker application"""
-    
+
     def __init__(self, log_dir: str = "logs"):
-        """
-        Initialize the logging system.
-        
+        """Initialize the logging system.
+
         Args:
             log_dir: Directory to store log files
         """
-        # If default 'logs', relocate to user path for packaged builds to avoid
-        # permission / CWD issues. macOS: ~/Library/Logs/AdvancedAutoclicker
-        # Windows: %AppData%/AdvancedAutoclicker/logs
+        # Resolve log directory
         if log_dir == "logs":
             system = platform.system()
             if system == "Darwin":
-                base = Path.home()/"Library"/"Logs"/"AdvancedAutoclicker"
+                base = Path.home() / "Library" / "Logs" / "AdvancedAutoclicker"
             elif system == "Windows":
-                base = Path(os.environ.get("APPDATA", Path.home()))/"AdvancedAutoclicker"/"logs"
+                base = Path(os.environ.get("APPDATA", Path.home())) / "AdvancedAutoclicker" / "logs"
             else:
-                base = Path.home()/".advanced_autoclicker"/"logs"
+                base = Path.home() / ".advanced_autoclicker" / "logs"
             self.log_dir = base
         else:
             self.log_dir = Path(log_dir)
         self.log_dir.mkdir(exist_ok=True)
-        
-        # Create log files
+
+        # File paths
         self.main_log_file = self.log_dir / "autoclicker.log"
         self.error_log_file = self.log_dir / "errors.log"
         self.action_log_file = self.log_dir / "actions.log"
-        
-        # Thread lock for thread-safe logging
+
+        # Synchronization
         self.lock = threading.Lock()
-        
-        # Setup loggers
+
+        # Detection suppression state
+        self._last_detection_success: Optional[bool] = None
+        self._suppressed_not_detected: int = 0
+
+        # Configure loggers and start session
         self._setup_loggers()
-        
-        # Start session
         self.log_info("=== Autoclicker Session Started ===")
         self._start_heartbeat()
 
@@ -168,15 +167,30 @@ class AutoclickerLogger:
     def log_detection(self, position: tuple, condition_type: str, result: bool, details: dict = None):
         """Log detection events"""
         status = "DETECTED" if result else "NOT_DETECTED"
-        action_details = {
-            "position": position,
-            "type": condition_type,
-            "result": status
-        }
-        
-        if details:
-            action_details.update(details)
-        
+
+        # Suppress consecutive NOT_DETECTED entries to avoid console flooding
+        # Only the first NOT_DETECTED after a DETECTED (or start) is shown until a DETECTED happens.
+        with self.lock:
+            if not result and self._last_detection_success is False:
+                self._suppressed_not_detected += 1
+                return
+
+            action_details = {
+                "position": position,
+                "type": condition_type,
+                "result": status
+            }
+            if details:
+                action_details.update(details)
+
+            # If we are about to log a DETECTED and had suppressed prior NOT_DETECTED entries, optionally note it.
+            if result and self._suppressed_not_detected:
+                # Emit a compact summary line before the DETECTED log.
+                self.main_logger.debug(f"[detection] Suppressed {self._suppressed_not_detected} repeated NOT_DETECTED events")
+                self._suppressed_not_detected = 0
+
+            self._last_detection_success = result
+        # Use log_action outside the lock (it acquires lock again) to keep consistency
         self.log_action("DETECTION", action_details, success=result)
     
     def log_click(self, position: tuple, click_type: str = "single", success: bool = True):
