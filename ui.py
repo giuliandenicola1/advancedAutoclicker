@@ -9,6 +9,12 @@ from delay_popup import DelayPopupManager
 from clicker import MouseClicker
 from logger import get_logger
 
+# Optional: modern theming with ttkbootstrap (falls back gracefully if unavailable)
+try:
+    import ttkbootstrap as ttkb
+except Exception:  # pragma: no cover - optional dependency
+    ttkb = None
+
 class AutoclickerUI:
     def run(self):
         """Start the Tkinter main loop."""
@@ -49,9 +55,32 @@ class AutoclickerUI:
             self.logger.log_info("Created new configuration", "ui")
         messagebox.showinfo("New Configuration", "Created a new blank configuration.")
     def __init__(self):
+        # Create root window first
         self.root = tk.Tk()
+
+        # Apply a modern theme if ttkbootstrap is available
+        self.style = None
+        if ttkb is not None:
+            try:
+                # Prefer a clean, modern light theme by default
+                self.style = ttkb.Style(theme="cosmo")
+                # Slightly larger default font for readability
+                try:
+                    self.style.configure('.', font=("SF Pro Text", 11))
+                except Exception:
+                    self.style.configure('.', font=("Helvetica", 11))
+            except Exception:
+                self.style = None
+
         self.root.title("Autoclicker")
-        self.root.geometry("600x500")
+        # Give a bit more room; make window responsive
+        self.root.geometry("900x720")
+        self.root.minsize(800, 600)
+        try:
+            self.root.grid_columnconfigure(0, weight=1)
+            self.root.grid_rowconfigure(1, weight=1)
+        except Exception:
+            pass
 
         # Initialize logger
         self.logger = get_logger()
@@ -79,7 +108,7 @@ class AutoclickerUI:
         # Create a menu bar
         menu_bar = tk.Menu(self.root)
         self.root.config(menu=menu_bar)
-        
+
         # Create File menu
         file_menu = tk.Menu(menu_bar, tearoff=0)
         menu_bar.add_cascade(label="File", menu=file_menu)
@@ -88,217 +117,188 @@ class AutoclickerUI:
         file_menu.add_command(label="Save Configuration...", command=self.save_config)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
-        
+
+        # Theme menu (only when ttkbootstrap is available)
+        if self.style is not None:
+            theme_menu = tk.Menu(menu_bar, tearoff=0)
+            menu_bar.add_cascade(label="Theme", menu=theme_menu)
+            themes = [
+                ("Cosmo (Light)", "cosmo"),
+                ("Flatly (Light)", "flatly"),
+                ("Journal (Light)", "journal"),
+                ("Morph (Light)", "morph"),
+                ("Solar (Light)", "solar"),
+                ("Cyborg (Dark)", "cyborg"),
+                ("Darkly (Dark)", "darkly"),
+                ("Superhero (Dark)", "superhero"),
+            ]
+
+            def _apply_theme(theme_name: str):
+                try:
+                    self.style.theme_use(theme_name)
+                except Exception:
+                    pass
+
+            for label, name in themes:
+                theme_menu.add_command(label=label, command=lambda n=name: _apply_theme(n))
+
         # Toolbar with most common actions
-        toolbar = ttk.Frame(self.root)
+        toolbar = ttk.Frame(self.root, padding=(10, 6))
         toolbar.grid(row=0, column=0, sticky=(tk.W, tk.E))
-        
-        ttk.Button(toolbar, text="New", command=self.new_config).grid(row=0, column=0, padx=5, pady=2)
-        ttk.Button(toolbar, text="Open", command=self.load_config).grid(row=0, column=1, padx=5, pady=2)
-        ttk.Button(toolbar, text="Save", command=self.save_config).grid(row=0, column=2, padx=5, pady=2)
-        
+        ttk.Button(toolbar, text="New", command=self.new_config).grid(row=0, column=0, padx=6, pady=4)
+        ttk.Button(toolbar, text="Open", command=self.load_config).grid(row=0, column=1, padx=6, pady=4)
+        ttk.Button(toolbar, text="Save", command=self.save_config).grid(row=0, column=2, padx=6, pady=4)
+
         # Main frame
-        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame = ttk.Frame(self.root, padding=(16, 12))
         main_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
+        for c in range(2):
+            main_frame.grid_columnconfigure(c, weight=1)
+        for r in range(8):
+            main_frame.grid_rowconfigure(r, weight=0)
+        main_frame.grid_rowconfigure(5, weight=1)  # conditions frame grows
+
         # Config name field (optional)
-        name_frame = ttk.LabelFrame(main_frame, text="Configuration Name (optional)", padding="10")
+        name_frame = ttk.LabelFrame(main_frame, text="Configuration Name (optional)", padding=(12, 10))
         name_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
-        ttk.Entry(name_frame, textvariable=self.config_name_var, width=30).grid(row=0, column=0, padx=5, pady=2, sticky=(tk.W, tk.E))
+        ttk.Entry(name_frame, textvariable=self.config_name_var, width=30).grid(row=0, column=0, padx=8, pady=4, sticky=(tk.W, tk.E))
         name_frame.columnconfigure(0, weight=1)
-        
+
         # Position selection (enhanced for areas)
-        pos_frame = ttk.LabelFrame(main_frame, text="Detection Area", padding="10")
+        pos_frame = ttk.LabelFrame(main_frame, text="Detection Area", padding=(12, 10))
         pos_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
-        
-        ttk.Button(pos_frame, text="Select Point", 
-                  command=self.select_position).grid(row=0, column=0, padx=5)
-        ttk.Button(pos_frame, text="Select Area", 
-                  command=self.select_area).grid(row=0, column=1, padx=5)
-        
+
+        ttk.Button(pos_frame, text="Select Point", command=self.select_position).grid(row=0, column=0, padx=6, pady=2)
+        ttk.Button(pos_frame, text="Select Area", command=self.select_area).grid(row=0, column=1, padx=6, pady=2)
+
         self.pos_label = ttk.Label(pos_frame, text="No position/area selected")
         self.pos_label.grid(row=1, column=0, columnspan=2, padx=10, pady=5)
-        
+
         # Click position (separate from detection)
-        click_frame = ttk.LabelFrame(main_frame, text="Click Position", padding="10")
+        click_frame = ttk.LabelFrame(main_frame, text="Click Position", padding=(12, 10))
         click_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
-        
-        ttk.Button(click_frame, text="Set Click Position", 
-                  command=self.select_click_position).grid(row=0, column=0, padx=5)
-        
+
+        ttk.Button(click_frame, text="Set Click Position", command=self.select_click_position).grid(row=0, column=0, padx=6, pady=2)
         self.click_pos_label = ttk.Label(click_frame, text="Click: Same as detection area")
         self.click_pos_label.grid(row=0, column=1, padx=10)
-        
+
         # Conditions frame
-        cond_frame = ttk.LabelFrame(main_frame, text="Conditions", padding="10")
+        cond_frame = ttk.LabelFrame(main_frame, text="Conditions", padding=(12, 10))
         cond_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
-        
-        # Condition type - using radio buttons instead of dropdown
+
         ttk.Label(cond_frame, text="Type:").grid(row=0, column=0, sticky=tk.W)
         type_frame = ttk.Frame(cond_frame)
         type_frame.grid(row=0, column=1, sticky=(tk.W, tk.E))
-        
         self.condition_type = tk.StringVar(value='color')
-        ttk.Radiobutton(type_frame, text="Color", variable=self.condition_type, 
-                       value='color', command=self.on_type_change).pack(side=tk.LEFT, padx=10)
-        ttk.Radiobutton(type_frame, text="Text", variable=self.condition_type, 
-                       value='text', command=self.on_type_change).pack(side=tk.LEFT, padx=10)
-        
-        # Value input
+        ttk.Radiobutton(type_frame, text="Color", variable=self.condition_type, value='color', command=self.on_type_change).pack(side=tk.LEFT, padx=10)
+        ttk.Radiobutton(type_frame, text="Text", variable=self.condition_type, value='text', command=self.on_type_change).pack(side=tk.LEFT, padx=10)
+
         ttk.Label(cond_frame, text="Value:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.value_frame = ttk.Frame(cond_frame)
         self.value_frame.grid(row=1, column=1, padx=5, sticky=(tk.W, tk.E))
-        
-        # Color picker button (initially hidden)
-        self.color_button = ttk.Button(self.value_frame, text="Pick Color", 
-                                      command=self.pick_color)
-        self.color_button_advanced = ttk.Button(self.value_frame, text="Advanced Picker", 
-                                               command=self.pick_color_advanced)
+
+        self.color_button = ttk.Button(self.value_frame, text="Pick Color", command=self.pick_color)
+        self.color_button_advanced = ttk.Button(self.value_frame, text="Advanced Picker", command=self.pick_color_advanced)
         self.color_label = ttk.Label(self.value_frame, text="No color selected")
-        
-        # Text entry (initially hidden)
         self.text_entry = ttk.Entry(self.value_frame, width=30)
-        
-        # Comparator
+
         ttk.Label(cond_frame, text="Comparator:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.comparator = ttk.Combobox(cond_frame, values=['equals', 'contains', 'similar'], state='readonly')
         self.comparator.grid(row=2, column=1, padx=5, sticky=(tk.W, tk.E))
         self.comparator.set('equals')
-        
-        # Tolerance (for color)
+
         ttk.Label(cond_frame, text="Tolerance:").grid(row=3, column=0, sticky=tk.W, pady=5)
         self.tolerance = ttk.Scale(cond_frame, from_=0, to=50, orient=tk.HORIZONTAL)
         self.tolerance.grid(row=3, column=1, padx=5, sticky=(tk.W, tk.E))
         self.tolerance.set(10)
-        
-        # Add condition button
-        ttk.Button(cond_frame, text="Add Condition", 
-                  command=self.add_condition).grid(row=4, column=0, columnspan=2, pady=10)
-        
-        # Conditions and Groups unified TreeView
+
+        ttk.Button(cond_frame, text="Add Condition", command=self.add_condition).grid(row=4, column=0, columnspan=2, pady=10)
+
         conditions_frame = ttk.LabelFrame(cond_frame, text="Conditions and Groups")
         conditions_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
-        
-        # Create a unified TreeView for both conditions and groups
-        self.unified_tree = ttk.Treeview(conditions_frame, columns=('type', 'details', 'logic'), 
-                                     show='tree headings', height=8)
-        self.unified_tree.heading('#0', text='') 
+
+        self.unified_tree = ttk.Treeview(conditions_frame, columns=('type', 'details', 'logic'), show='tree headings', height=8)
+        self.unified_tree.heading('#0', text='')
         self.unified_tree.heading('type', text='Type')
         self.unified_tree.heading('details', text='Details')
         self.unified_tree.heading('logic', text='Logic')
-        
         self.unified_tree.column('#0', width=30)
         self.unified_tree.column('type', width=100)
         self.unified_tree.column('details', width=300)
         self.unified_tree.column('logic', width=80)
-        
-        # Add scrollbar
+
         tree_scrollbar = ttk.Scrollbar(conditions_frame, orient="vertical", command=self.unified_tree.yview)
         self.unified_tree.configure(yscrollcommand=tree_scrollbar.set)
-        
-        # Pack the tree and scrollbar
         self.unified_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
         tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=5)
-        
-        # Add context menu to the tree
+
         self.tree_context_menu = tk.Menu(self.unified_tree, tearoff=0)
         self.unified_tree.bind("<Button-3>", self.show_tree_context_menu)
         self.unified_tree.bind("<Double-1>", self.on_tree_item_double_click)
-        
-        # Action buttons
+
         action_buttons = ttk.Frame(conditions_frame)
         action_buttons.pack(fill=tk.X, padx=5, pady=5)
-        
-        ttk.Button(action_buttons, text="Add Condition", 
-                  command=self.add_condition).pack(side=tk.LEFT, padx=5)
-                  
-        ttk.Button(action_buttons, text="New Group", 
-                  command=self.create_group).pack(side=tk.LEFT, padx=5)
-                  
-        ttk.Button(action_buttons, text="Edit Selected", 
-                  command=self.edit_selected_item).pack(side=tk.LEFT, padx=5)
-                  
-        ttk.Button(action_buttons, text="Remove Selected", 
-                  command=self.remove_selected_item).pack(side=tk.LEFT, padx=5)
-                  
-        # Keep backward compatibility with old code that uses conditions_listbox and groups_listbox
-        # We'll use these as hidden references that the unified tree will update
+        ttk.Button(action_buttons, text="Add Condition", command=self.add_condition).pack(side=tk.LEFT, padx=6)
+        ttk.Button(action_buttons, text="New Group", command=self.create_group).pack(side=tk.LEFT, padx=6)
+        ttk.Button(action_buttons, text="Edit Selected", command=self.edit_selected_item).pack(side=tk.LEFT, padx=6)
+        ttk.Button(action_buttons, text="Remove Selected", command=self.remove_selected_item).pack(side=tk.LEFT, padx=6)
+
+        # Backward-compat hidden widgets
         self.conditions_listbox = tk.Listbox()
         self.groups_listbox = ttk.Treeview(columns=('name', 'logic', 'conditions'))
-                  
-        # Initialize empty condition groups list
         self.condition_groups = []
-        
+
         # Logic frame
-        logic_frame = ttk.LabelFrame(main_frame, text="Logic", padding="10")
+        logic_frame = ttk.LabelFrame(main_frame, text="Logic", padding=(12, 10))
         logic_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
-        
         ttk.Label(logic_frame, text="Rule Logic:").grid(row=0, column=0, sticky=tk.W)
         self.logic = ttk.Combobox(logic_frame, values=['any', 'all', 'n-of'], state='readonly')
         self.logic.grid(row=0, column=1, padx=5)
         self.logic.set('any')
         self.logic.bind('<<ComboboxSelected>>', self.on_logic_change)
-        
-        # N value for n-of logic
         self.n_label = ttk.Label(logic_frame, text="N:")
         self.n_entry = ttk.Entry(logic_frame, width=5)
-        
+
         # Settings frame
-        settings_frame = ttk.LabelFrame(main_frame, text="Settings", padding="10")
+        settings_frame = ttk.LabelFrame(main_frame, text="Settings", padding=(12, 10))
         settings_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
-        
         ttk.Label(settings_frame, text="Delay (seconds):").grid(row=0, column=0, sticky=tk.W)
         self.delay = ttk.Combobox(settings_frame, values=['0', '3', '5', '10', '15', '30'], width=8)
         self.delay.grid(row=0, column=1, padx=5)
         self.delay.set('0')
-        
-        # Bind delay field to update popup checkbox state
         self.delay.bind('<<ComboboxSelected>>', self._on_delay_change)
         self.delay.bind('<KeyRelease>', self._on_delay_change)
         self.delay.bind('<FocusOut>', self._on_delay_change)
-        
         self.popup_var = tk.BooleanVar(value=True)
-        self.popup_checkbox = ttk.Checkbutton(settings_frame, text="Show confirmation popup", 
-                       variable=self.popup_var)
+        self.popup_checkbox = ttk.Checkbutton(settings_frame, text="Show confirmation popup", variable=self.popup_var)
         self.popup_checkbox.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=5)
-        
-        # Initialize popup checkbox state based on initial delay value
         self._on_delay_change()
-        
-        # Click type setting
         ttk.Label(settings_frame, text="Click type:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.click_type = ttk.Combobox(settings_frame, values=['single', 'double', 'right'], width=8, state='readonly')
         self.click_type.grid(row=2, column=1, padx=5)
         self.click_type.set('single')
-        
+
         # Control buttons
         control_frame = ttk.Frame(main_frame)
         control_frame.grid(row=6, column=0, columnspan=2, pady=10)
-        
-        self.start_button = ttk.Button(control_frame, text="Start Monitoring", 
-                                      command=self.start_monitoring)
-        self.start_button.grid(row=0, column=0, padx=5)
-        
-        self.stop_button = ttk.Button(control_frame, text="Stop Monitoring", 
-                                     command=self.stop_monitoring, state='disabled')
-        self.stop_button.grid(row=0, column=1, padx=5)
-        
-        # Logs button
-        self.logs_button = ttk.Button(control_frame, text="View Logs", 
-                                     command=self.show_logs_window)
-        self.logs_button.grid(row=0, column=2, padx=5)
-        
-        # Status label (moved to row 6, below control frame)
+        self.start_button = ttk.Button(control_frame, text="Start Monitoring", command=self.start_monitoring)
+        self.start_button.grid(row=0, column=0, padx=8)
+        self.stop_button = ttk.Button(control_frame, text="Stop Monitoring", command=self.stop_monitoring, state='disabled')
+        self.stop_button.grid(row=0, column=1, padx=8)
+        self.logs_button = ttk.Button(control_frame, text="View Logs", command=self.show_logs_window)
+        self.logs_button.grid(row=0, column=2, padx=8)
+
+        # Status
         self.status_label = ttk.Label(main_frame, text="Ready", font=("Arial", 10))
         self.status_label.grid(row=7, column=0, columnspan=2, pady=5)
-        
+
         # Variables
         self.selected_position = None
         self.selected_color = None
-        self.selected_area = None  # For area selection: (x1, y1, x2, y2)
-        self.click_position = None  # Separate click position
+        self.selected_area = None
+        self.click_position = None
         self.conditions = []
-        self.click_count = 0  # Track successful clicks for continuous operation
+        self.click_count = 0
         
     def select_position(self):
         """Let user select a position on screen with real-time feedback"""

@@ -213,6 +213,19 @@ class AutoclickerLogger:
         except Exception as e:
             self.log_error(f"Failed to read log file {log_file}", "logger", e)
             return [f"Error reading log file: {str(e)}"]
+
+    # --- Compatibility helpers used by monitoring UI ---
+    def get_logs_by_type(self, log_type: str, lines: int = 500) -> List[str]:
+        """Return recent logs for a given type ('main', 'error', 'action')."""
+        return self.get_recent_logs(log_type, lines)
+
+    def get_all_logs(self, lines: int = 500) -> List[str]:
+        """Return combined recent logs from main log. Kept for UI compatibility."""
+        return self.get_recent_logs("main", lines)
+
+    def clear_all_logs(self):
+        """Clear all log files (compatibility wrapper)."""
+        self.clear_logs("all")
     
     def get_log_stats(self) -> dict:
         """Get statistics about log files"""

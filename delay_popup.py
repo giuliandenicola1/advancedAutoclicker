@@ -138,6 +138,11 @@ class DelayPopupManager:
             self.popup_window.destroy()
             self.popup_window = None
         
+        # Restore the main window
+        if self.parent_window:
+            self.parent_window.deiconify()
+            self.parent_window.lift()
+        
         # Execute callback
         if self.on_proceed_callback and not self.is_cancelled:
             if self.parent_window:
@@ -161,17 +166,31 @@ class DelayPopupManager:
             
         # Store delay for later use
         self._current_delay_seconds = delay_seconds
+        
+        # Hide the main window
+        if self.parent_window:
+            self.parent_window.withdraw()
             
         self.popup_window = tk.Toplevel(self.parent_window)
         self.popup_window.title("Autoclicker Confirmation")
         # Increased height significantly to ensure buttons are always visible
         window_height = 400 if delay_seconds > 0 else 350
-        self.popup_window.geometry(f"550x{window_height}")  # Made wider and taller
+        window_width = 550
+        self.popup_window.geometry(f"{window_width}x{window_height}")  # Made wider and taller
         self.popup_window.resizable(False, False)
         
-        # Center the popup
+        # Center the popup on screen
+        self.popup_window.update_idletasks()  # Update to get actual window size
+        screen_width = self.popup_window.winfo_screenwidth()
+        screen_height = self.popup_window.winfo_screenheight()
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        self.popup_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        
+        # Make popup modal and on top
         self.popup_window.transient(self.parent_window)
         self.popup_window.grab_set()
+        self.popup_window.attributes('-topmost', True)
         
         # Create popup content
         main_frame = tk.Frame(self.popup_window, padx=20, pady=20)
@@ -258,10 +277,15 @@ class DelayPopupManager:
         print("✅ User clicked Proceed - skipping countdown!")
         self.is_cancelled = True  # Stop the countdown thread
         
-        # Close popup
+        # Close popup and restore main window
         if self.popup_window:
             self.popup_window.destroy()
             self.popup_window = None
+            
+        # Restore the main window
+        if self.parent_window:
+            self.parent_window.deiconify()
+            self.parent_window.lift()
             
         # Execute immediately
         if self.on_proceed_callback:
@@ -296,6 +320,15 @@ class DelayPopupManager:
                     self.popup_window.after(0, lambda: self.countdown_label.config(text="🚀 Clicking NOW!"))
                 print("🚀 Executing click now!")
                 time.sleep(0.5)  # Brief pause to show final message
+                
+                # Close popup and restore main window
+                if self.popup_window:
+                    self.popup_window.destroy()
+                    self.popup_window = None
+                    
+                if self.parent_window:
+                    self.parent_window.deiconify()
+                    self.parent_window.lift()
                     
             # Execute the callback after delay
             if not self.is_cancelled and self.on_proceed_callback:
@@ -348,6 +381,11 @@ class DelayPopupManager:
         if self.popup_window:
             self.popup_window.destroy()
             self.popup_window = None
+        
+        # Restore the main window
+        if self.parent_window:
+            self.parent_window.deiconify()
+            self.parent_window.lift()
         
         # Call stop monitoring callback to stop the entire monitoring process
         if self.on_stop_monitoring_callback:
