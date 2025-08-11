@@ -1,0 +1,123 @@
+name: build-and-release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v1.0.0)'
+        required: false
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build app (PyInstaller)
+        run: |
+          pyinstaller --noconfirm AdvancedAutoclicker_Modern.spec
+
+      - name: Create DMG
+        run: |
+          bash scripts/create_dmg.sh
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: |
+            dist/Advanced Autoclicker.app
+            dist/AdvancedAutoclicker-macOS.dmg
+
+  build-windows:
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build app (PyInstaller)
+        run: |
+          pyinstaller --noconfirm AdvancedAutoclicker_Modern.spec
+
+      - name: Zip distribution
+        run: |
+          Compress-Archive -Path "dist/Advanced Autoclicker" -DestinationPath "dist/AdvancedAutoclicker-Windows.zip"
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            dist/Advanced Autoclicker/**
+            dist/AdvancedAutoclicker-Windows.zip
+
+  create-release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-artifacts
+          path: macos
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: windows
+
+      - name: Generate checksums
+        run: |
+          echo "Checksums:" > CHECKSUMS.txt
+          if [ -f "macos/AdvancedAutoclicker-macOS.dmg" ]; then
+            shasum -a 256 "macos/AdvancedAutoclicker-macOS.dmg" >> CHECKSUMS.txt
+          fi
+          find windows -type f -name '*.exe' -maxdepth 6 -print0 | xargs -0 shasum -a 256 >> CHECKSUMS.txt || true
+          find windows -type f -name 'AdvancedAutoclicker-Windows.zip' -maxdepth 3 -print0 | xargs -0 shasum -a 256 >> CHECKSUMS.txt || true
+          cat CHECKSUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || inputs.tag }}
+          name: Advanced Autoclicker ${{ github.ref_name || inputs.tag }}
+          draft: false
+          prerelease: false
+          files: |
+            macos/AdvancedAutoclicker-macOS.dmg
+            windows/AdvancedAutoclicker-Windows.zip
+            CHECKSUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
