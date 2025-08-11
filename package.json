@@ -1,0 +1,53 @@
+{
+  "name": "copilot-auto-continue",
+  "displayName": "Copilot Auto Continue",
+  "description": "Automatically clicks 'Continue' in Copilot Chat when specified terminal prompts are detected.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.87.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilot-auto-continue.helloWorld",
+        "title": "Hello World"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Copilot Auto Continue",
+      "properties": {
+        "copilotAutoContinue.allowedPrompts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["Type 'continue' to proceed"],
+          "description": "List of allowed prompts. If any of these are detected in the terminal, Copilot Chat will auto-continue."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.87.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@typescript-eslint/eslint-plugin": "^8.39.0",
+    "@typescript-eslint/parser": "^8.39.0",
+    "eslint": "^9.32.0",
+    "typescript": "^5.9.2",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}
