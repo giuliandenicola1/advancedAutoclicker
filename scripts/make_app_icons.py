@@ -27,7 +27,7 @@ except ImportError:
     sys.exit(1)
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE_ICON = ROOT / "src" / "ChatGPT Image Aug 11, 2025, 11_41_23 PM.png"
+SOURCE_ICON = ROOT / "docs" / "images" / "screenshot_config.png"
 OUT_DIR = ROOT / "build" / "icons"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
