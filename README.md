@@ -2,7 +2,7 @@
 
 An advanced, modular desktop autoclicker that can monitor multiple screen positions and only click when user‑defined condition sets (ALL or ANY logic) are satisfied. Supports complex condition groups, color / pixel / area checks, delayed start, and real‑time monitoring with logs.
 
-> Attribution: This codebase (application logic, UI structure, build scripts, and packaging configuration) was fully authored with the assistance of AI.
+> Attribution: This codebase (application logic, UI structure, build scripts, and packaging configuration) was fully written by AI.
 
 ## Key Features
 - Multiple independent click conditions (color match, position, area, etc.)
@@ -111,11 +111,8 @@ Within the UI you can add multiple condition rows and group them:
 - Extended condition types (image similarity, template matching)
 - Auto update & code signing / notarization steps
 
-## License
-Specify your chosen license here (MIT / Apache-2.0 / etc.).
-
 ## Attribution Reminder
-This project was fully authored with AI assistance (design, code, docs). Review and validate before production use.
+This project was fully written by AI (design, code, docs). Review and validate before production use.
 
 ---
 Happy automating!
