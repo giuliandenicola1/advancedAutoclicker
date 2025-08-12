@@ -1,5 +1,9 @@
 from dataclasses import dataclass
 from typing import List, Literal, Optional, Union
+try:  # Local import; optional safety
+    from version import __version__ as APP_VERSION
+except Exception:
+    APP_VERSION = "0.0.0"
 
 @dataclass
 class Condition:
@@ -52,7 +56,7 @@ class Config:
     rules: List[Rule] = None
     delay: int = 0  # Delay in seconds before clicking
     popup: bool = True  # Show confirmation popup
-    version: str = "1.0"  # Configuration version
+    version: str = APP_VERSION  # Configuration version
 
     def __post_init__(self):
         if self.rules is None:
@@ -130,7 +134,7 @@ class Config:
     def from_dict(cls, data: dict) -> 'Config':
         """Create a configuration from a dictionary"""
         config = cls()
-        config.version = data.get('version', '1.0')
+        config.version = data.get('version', APP_VERSION)
         config.delay = data.get('delay', 0)
         config.popup = data.get('popup', True)
         
