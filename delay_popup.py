@@ -5,6 +5,7 @@ Delay and popup management for autoclicker - handles user intervention before cl
 import time
 import threading
 import tkinter as tk
+from tkinter import ttk
 from typing import Callable, Optional
 
 
@@ -277,59 +278,59 @@ class DelayPopupManager:
                 fg="gray"
             )
             info_label.pack(pady=5)
-            
-        # Create buttons with absolute positioning to ensure visibility
-        proceed_button = tk.Button(
-            main_frame, 
-            text="PROCEED", 
+
+        # Configure custom styles (macOS native theme ignores bg for ttk, so switch)
+        try:
+            style = ttk.Style(self.popup_window)
+            current_theme = style.theme_use()
+            if current_theme in ("aqua", "default"):
+                style.theme_use("clam")
+            base_btn_cfg = dict(font=("Arial", 12, "bold"), padding=(10, 6))
+            style.configure("DelayProceed.TButton", background="black", foreground="white", **base_btn_cfg)
+            style.map("DelayProceed.TButton",
+                       background=[("active", "#222222"), ("pressed", "#111111")],
+                       foreground=[("disabled", "#777777")])
+            style.configure("DelayCancel.TButton", background="black", foreground="white", **base_btn_cfg)
+            style.map("DelayCancel.TButton",
+                       background=[("active", "#222222"), ("pressed", "#111111")],
+                       foreground=[("disabled", "#777777")])
+        except Exception as e:
+            print(f"[DelayPopup] Style configuration failed: {e}")
+
+        # Create ttk buttons and place them
+        proceed_button = ttk.Button(
+            main_frame,
+            text="PROCEED",
             command=self._on_proceed_clicked,
-            font=("Arial", 12, "bold"),
-            bg="green",
-            fg="white",
-            width=12,
-            height=2
+            style="DelayProceed.TButton",
+            takefocus=True
         )
-        proceed_button.place(x=100, y=320)  # Absolute position
-        
-        cancel_button = tk.Button(
-            main_frame, 
-            text="CANCEL", 
+        proceed_button.place(x=100, y=320)
+
+        cancel_button = ttk.Button(
+            main_frame,
+            text="CANCEL",
             command=self._on_cancel_clicked,
-            font=("Arial", 12, "bold"),
-            bg="red",
-            fg="white",
-            width=12,
-            height=2
+            style="DelayCancel.TButton",
+            takefocus=False
         )
-        cancel_button.place(x=300, y=320)  # Absolute position
-        
-        # Auto-focus and key bindings
+        cancel_button.place(x=300, y=320)
+
+        # Focus & key bindings
         proceed_button.focus_set()
         self.popup_window.bind('<Return>', lambda e: self._on_proceed_clicked())
         self.popup_window.bind('<Escape>', lambda e: self._on_cancel_clicked())
-        
-        # Handle window close
-        self.popup_window.protocol("WM_DELETE_WINDOW", self._on_cancel_clicked)
-        
-        # Only auto-close if no delay is set (otherwise user should make conscious choice)
-        if delay_seconds == 0:
-            timeout_ms = 10000  # 10 seconds for no-delay situations
-            self.popup_window.after(timeout_ms, self._auto_close_popup)
+
         # If there's a delay, let the user decide (no auto-close)
-        
+
         # Fallback: ensure popup visible shortly after
         def _visibility_guard():
             try:
                 if self.popup_window and not self.is_cancelled:
-                    # If for some reason it lost topmost, reassert
-                    try:
-                        self.popup_window.attributes('-topmost', True)
-                        self.popup_window.lift()
-                    except Exception:
-                        pass
+                    self.popup_window.attributes('-topmost', True)
+                    self.popup_window.lift()
             except Exception:
                 pass
-        self.popup_window.after(250, _visibility_guard)
         
     def _on_proceed_clicked(self) -> None:
         """Handle proceed button click - skip countdown and execute immediately"""

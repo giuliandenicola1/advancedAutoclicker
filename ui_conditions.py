@@ -17,8 +17,8 @@ class UIConditionsMixin:
         
         try:
             messagebox.showinfo("Position Selection", 
-                              "Move your mouse to the desired position and click OK.\n"
-                              "The mouse coordinates will be captured.")
+                              "Move your mouse to the desired position, then press ENTER or SPACE.\n"
+                              "Keep the mouse over the target location while confirming.")
             
             # Get current mouse position
             self.selected_position = pyautogui.position()
@@ -49,13 +49,13 @@ class UIConditionsMixin:
         
         try:
             messagebox.showinfo("Area Selection", 
-                              "First, click OK then click the TOP-LEFT corner of the area.")
+                              "Move your mouse to the TOP-LEFT corner of the area, then press ENTER or SPACE.")
             
             # Get first point
             point1 = pyautogui.position()
             
             messagebox.showinfo("Area Selection", 
-                              "Now click the BOTTOM-RIGHT corner of the area.")
+                              "Move your mouse to the BOTTOM-RIGHT corner of the area, then press ENTER or SPACE.")
             
             # Get second point
             point2 = pyautogui.position()
@@ -88,7 +88,7 @@ class UIConditionsMixin:
         
         try:
             messagebox.showinfo("Click Position Selection", 
-                              "Move your mouse to where you want clicks to occur and click OK.")
+                              "Move your mouse to where you want clicks to occur, then press ENTER or SPACE.")
             
             self.selected_click_position = pyautogui.position()
             self.click_pos_label.config(text=f"Click: ({self.selected_click_position[0]}, {self.selected_click_position[1]})")
@@ -124,7 +124,7 @@ class UIConditionsMixin:
         
         try:
             messagebox.showinfo("Color Picker", 
-                              "Move your mouse over the target color and click OK to capture it.")
+                              "Move your mouse over the target color, then press ENTER or SPACE to capture it.")
             
             # Get mouse position and capture color
             pos = pyautogui.position()
@@ -615,7 +615,7 @@ class UIConditionsMixin:
         def _reselect_point():
             dialog.withdraw()
             try:
-                messagebox.showinfo("Reselect Point", "Move mouse to desired point then click OK.")
+                messagebox.showinfo("Reselect Point", "Move mouse to the desired point, then press ENTER or SPACE.")
                 new_pos = pyautogui.position()
                 # Keep value unchanged
                 condition_to_edit.position = (new_pos.x, new_pos.y)
@@ -625,9 +625,9 @@ class UIConditionsMixin:
         def _reselect_area():
             dialog.withdraw()
             try:
-                messagebox.showinfo("Reselect Area", "Select TOP-LEFT corner then click OK.")
+                messagebox.showinfo("Reselect Area", "Move mouse to the TOP-LEFT corner, then press ENTER or SPACE.")
                 p1 = pyautogui.position()
-                messagebox.showinfo("Reselect Area", "Select BOTTOM-RIGHT corner then click OK.")
+                messagebox.showinfo("Reselect Area", "Move mouse to the BOTTOM-RIGHT corner, then press ENTER or SPACE.")
                 p2 = pyautogui.position()
                 x1, y1 = min(p1.x, p2.x), min(p1.y, p2.y)
                 x2, y2 = max(p1.x, p2.x), max(p1.y, p2.y)
@@ -647,7 +647,7 @@ class UIConditionsMixin:
             def _re_pick_color():
                 dialog.withdraw()
                 try:
-                    messagebox.showinfo("Pick Color", "Move mouse over target color then click OK.")
+                    messagebox.showinfo("Pick Color", "Move mouse over the target color, then press ENTER or SPACE.")
                     pos = pyautogui.position()
                     screenshot = pyautogui.screenshot()
                     pixel_color = screenshot.getpixel(pos)[:3]

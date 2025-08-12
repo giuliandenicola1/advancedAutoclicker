@@ -341,8 +341,8 @@ class AutoclickerUI:
         
         try:
             messagebox.showinfo("Position Selection", 
-                              "Move your mouse to the desired position and click OK.\n"
-                              "The mouse coordinates will be captured.")
+                              "Move your mouse to the desired position, then press ENTER or SPACE.\n"
+                              "Keep the mouse still over the target while confirming.")
             
             # Get current mouse position
             self.selected_position = pyautogui.position()
@@ -378,14 +378,14 @@ class AutoclickerUI:
         
         try:
             messagebox.showinfo("Area Selection", 
-                              "Click the TOP-LEFT corner of the area first.")
+                              "Move your mouse to the TOP-LEFT corner of the area, then press ENTER or SPACE.")
             
             # Get first point (top-left)
             x1, y1 = pyautogui.position()
             
             messagebox.showinfo("Area Selection", 
-                              f"Top-left: ({x1}, {y1})\n"
-                              f"Now click the BOTTOM-RIGHT corner.")
+                              f"Top-left: ({x1}, {y1}) captured.\n"
+                              f"Move your mouse to the BOTTOM-RIGHT corner, then press ENTER or SPACE.")
             
             # Get second point (bottom-right)
             x2, y2 = pyautogui.position()
@@ -426,7 +426,7 @@ class AutoclickerUI:
         
         try:
             messagebox.showinfo("Click Position", 
-                              "Select where you want to click when conditions are met.")
+                              "Move your mouse to the position where clicks should occur, then press ENTER or SPACE.")
             
             self.click_position = pyautogui.position()
             
@@ -468,8 +468,8 @@ class AutoclickerUI:
         
         try:
             messagebox.showinfo("Color Picker", 
-                              "Move your mouse to the desired position and click OK.\n"
-                              "The color at your mouse position will be captured.")
+                              "Move your mouse over the desired color, then press ENTER or SPACE.\n"
+                              "Keep the mouse over the pixel while confirming to capture its color.")
             
             # Get current mouse position
             mouse_x, mouse_y = pyautogui.position()
