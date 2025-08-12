@@ -143,5 +143,8 @@ Within the UI you can add multiple condition rows and group them:
 ## Attribution Reminder
 This project was fully written by AI (design, code, docs). Review and validate before production use.
 
+## License
+Creative Commons Attribution-NonCommercial 4.0 (CC BY-NC 4.0)
+
 ---
 Happy automating!
