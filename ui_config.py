@@ -2,6 +2,10 @@ from tkinter import messagebox, filedialog
 import json
 import datetime
 from config import Config, Rule, ConditionGroup
+try:
+    from version import __version__ as APP_VERSION
+except Exception:
+    APP_VERSION = "0.0.0"
 
 
 class UIConfigMixin:
@@ -50,7 +54,7 @@ class UIConfigMixin:
             config_dict["metadata"] = {
                 "name": config_name if config_name else "Unnamed Configuration",
                 "created": now.isoformat(),
-                "version": "2.0",
+                "version": APP_VERSION,
                 "total_conditions": len(self.conditions) + sum(len(g.conditions) for g in self.condition_groups),
                 "total_groups": len(self.condition_groups)
             }

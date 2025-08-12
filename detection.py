@@ -7,7 +7,13 @@ import numpy as np
 import pytesseract
 import pyautogui
 import math
-from typing import Tuple, Union
+import difflib
+import os
+import time
+import re
+import string
+from pathlib import Path
+from typing import Tuple, Union, List, Dict
 from config import Condition
 
 
@@ -20,11 +26,17 @@ class DetectionEngine:
         
         # Verify Tesseract OCR is available
         try:
+            # Allow explicit override via environment variable if user installed tesseract in a non-standard path
+            tess_cmd = os.environ.get("TESSERACT_CMD")
+            if tess_cmd:
+                pytesseract.pytesseract.tesseract_cmd = tess_cmd
             pytesseract.get_tesseract_version()
             print("✅ Tesseract OCR detected")
         except Exception as e:
             print(f"⚠️ Warning: Tesseract OCR may not be properly installed: {e}")
             print("Text detection features may not work correctly.")
+            print("  👉 On macOS: brew install tesseract")
+            print("  👉 If installed but not found: export TESSERACT_CMD=\"/opt/homebrew/bin/tesseract\"")
         
     def capture_screen_region(self, position: Union[Tuple[int, int], Tuple[int, int, int, int]], region_size: int = 20) -> np.ndarray:
         """
@@ -194,61 +206,318 @@ class DetectionEngine:
         print(f"  🎯 Target text: '{target_text}'")
         
         try:
-            # Enhanced preprocessing pipeline for better OCR
-            
-            # 1. Convert to grayscale
-            gray = cv2.cvtColor(img_region, cv2.COLOR_BGR2GRAY)
-            
-            # 2. Apply thresholding to make text more distinct
-            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-            
-            # 3. Perform OCR on both the grayscale and binary images
-            config = '--psm 6 --oem 3'  # Page segmentation mode 6: Assume a single uniform block of text
-            detected_text_gray = pytesseract.image_to_string(gray, config=config).strip()
-            detected_text_binary = pytesseract.image_to_string(binary, config=config).strip()
-            
-            # Debug output for both processing methods
-            print(f"  👁️  OCR result (gray): '{detected_text_gray}'")
-            print(f"  👁️  OCR result (binary): '{detected_text_binary}'")
-            
-            # 4. Combine results - use whichever one found text
-            detected_text = detected_text_gray if detected_text_gray else detected_text_binary
-            
-            # Try additional OCR mode for small text
-            if not detected_text:
-                print("  🔄 Trying alternative OCR mode for small text...")
-                detected_text = pytesseract.image_to_string(gray, config='--psm 7 --oem 3').strip()
-                print(f"  👁️  OCR result (psm 7): '{detected_text}'")
-            
-            # Try one more OCR mode for sparse text
-            if not detected_text:
-                print("  🔄 Trying alternative OCR mode for sparse text...")
-                detected_text = pytesseract.image_to_string(gray, config='--psm 11 --oem 3').strip()
-                print(f"  👁️  OCR result (psm 11): '{detected_text}'")
-            
-            print(f"  📏 Text length: Target={len(target_text)}, Detected={len(detected_text)}")
-            
-            # Check text match based on comparator
-            result = False
-            if condition.comparator == 'equals':
-                result = detected_text.lower() == target_text.lower()
-                print(f"  🔍 Exact match: {'✅ YES' if result else '❌ NO'}")
-            elif condition.comparator == 'contains':
-                result = target_text.lower() in detected_text.lower()
-                print(f"  🔍 Contains match: {'✅ YES' if result else '❌ NO'}")
-            elif condition.comparator == 'similar':
-                result = self._text_similar(detected_text, target_text)
-                print(f"  🔍 Similar match: {'✅ YES' if result else '❌ NO'}")
-                
-            return result
-            
+            start_time = time.time()
+            preprocessed_variants = self._preprocess_for_ocr(img_region)
+
+            # -------- FAST PATH --------
+            fast_mode = os.environ.get('ADV_OCR_FAST', '1') != '0'
+            if fast_mode:
+                gray = preprocessed_variants.get('gray')
+                # Quick token fetch via image_to_data
+                tokens_fast = self._ocr_tokens(gray)
+                if tokens_fast:
+                    norm_tokens_fast = [t.lower().strip('.,:;') for t in tokens_fast]
+                    tl = target_text.lower()
+                    if ((condition.comparator == 'equals' and tl in norm_tokens_fast) or
+                        (condition.comparator == 'contains' and any(tl in t for t in norm_tokens_fast)) or
+                        (condition.comparator == 'similar' and any(self._text_similar(t, target_text) for t in norm_tokens_fast))):
+                        elapsed = (time.time() - start_time) * 1000
+                        print(f"  ⚡ FAST token match in {elapsed:.1f}ms")
+                        return True
+                # Single quick full text pass
+                try:
+                    quick_text = pytesseract.image_to_string(gray, config='--psm 6 --oem 3').strip()
+                except Exception:
+                    quick_text = ''
+                if quick_text:
+                    ql = quick_text.lower()
+                    tl = target_text.lower()
+                    if ((condition.comparator == 'equals' and ql == tl) or
+                        (condition.comparator == 'contains' and tl in ql) or
+                        (condition.comparator == 'similar' and self._text_similar(quick_text, target_text))):
+                        elapsed = (time.time() - start_time) * 1000
+                        print(f"  ⚡ FAST full-text match in {elapsed:.1f}ms -> '{quick_text[:60].replace('\n',' / ')}'")
+                        return True
+                # Allow disabling exhaustive pass
+                if os.environ.get('ADV_OCR_FULL_FALLBACK','1') == '0':
+                    elapsed = (time.time() - start_time) * 1000
+                    print(f"  🛑 Fast mode no match (fallback disabled) elapsed {elapsed:.1f}ms")
+                    return False
+
+            # Run multiple OCR strategies
+            ocr_attempts: List[Dict[str, str]] = []
+            base_psm_sequence = [6, 7, 11, 3, 13]  # Prioritized PSM modes
+            whitelist = self._derive_whitelist(target_text)
+
+            # Allow customization via environment vars
+            env_psm = os.environ.get('ADV_OCR_PSMS')
+            if env_psm:
+                try:
+                    seq = [int(x) for x in env_psm.split(',') if x.strip().isdigit()]
+                    if seq:
+                        base_psm_sequence = seq
+                        print(f"  [OCR] Using custom PSM sequence {base_psm_sequence}")
+                except Exception:
+                    pass
+            env_variants = os.environ.get('ADV_OCR_VARIANTS')
+            variant_items = preprocessed_variants.items()
+            if env_variants:
+                requested = [v.strip() for v in env_variants.split(',')]
+                filtered = [(k, preprocessed_variants[k]) for k in requested if k in preprocessed_variants]
+                if filtered:
+                    variant_items = filtered
+                    print(f"  [OCR] Using custom variants {', '.join(k for k,_ in filtered)}")
+
+            for variant_name, variant_img in variant_items:
+                for psm in base_psm_sequence:
+                    config_parts = [f"--psm {psm}", "--oem 3"]
+                    if whitelist:
+                        config_parts.append(f"-c tessedit_char_whitelist={whitelist}")
+                    config = " ".join(config_parts)
+                    try:
+                        text = pytesseract.image_to_string(variant_img, config=config).strip()
+                    except Exception as ocr_e:
+                        print(f"  ⚠️ OCR failure on {variant_name} psm={psm}: {ocr_e}")
+                        text = ""
+                    if text:
+                        ocr_attempts.append({
+                            'variant': variant_name,
+                            'psm': str(psm),
+                            'text': text
+                        })
+                        print(f"  👁  [{variant_name} | psm {psm}] -> '{text[:120].replace('\n',' / ')}{'...' if len(text)>120 else ''}'")
+                        # Quick token extraction from this attempt for early exit
+                        quick_tokens = self._extract_tokens_from_text(text)
+                        if target_text.lower() in [t.lower() for t in quick_tokens]:
+                            elapsed = (time.time()-start_time)*1000
+                            print(f"  ✅ Early token match '{target_text}' in variant={variant_name} psm={psm} ({elapsed:.1f}ms)")
+                            return True
+                        # Short-circuit if we already have an exact match
+                        if text.lower() == target_text.lower():
+                            elapsed = (time.time()-start_time)*1000
+                            print(f"  ✅ Early exact match; stopping further OCR attempts ({elapsed:.1f}ms)")
+                            return True
+
+            # Aggregate all detected texts
+            combined_text = " | ".join([a['text'] for a in ocr_attempts])
+            print(f"  [OCR] Combined text length={len(combined_text)}")
+
+            # Token level evaluation using image_to_data for highest recall
+            tokens = self._ocr_tokens(preprocessed_variants.get('enhanced', list(preprocessed_variants.values())[0]))
+            if tokens:
+                print(f"  🧩 OCR tokens ({len(tokens)}): {tokens[:25]}{'...' if len(tokens)>25 else ''}")
+                # Early token direct hit
+                if target_text.lower() in [t.lower().strip('.,:;') for t in tokens]:
+                    print("  ✅ Direct token list match")
+                    return True
+
+            # Evaluate match conditions
+            target_lower = target_text.lower()
+            detected_any = False
+
+            # Helper closure for comparators
+            def eval_match(text: str) -> bool:
+                if condition.comparator == 'equals':
+                    return text.lower() == target_lower
+                elif condition.comparator == 'contains':
+                    return target_lower in text.lower()
+                elif condition.comparator == 'similar':
+                    return self._text_similar(text, target_text)
+                return False
+
+            # Build candidate lines (flatten all attempt texts into individual lines, cleaned)
+            candidate_lines: List[str] = []
+            for attempt in ocr_attempts:
+                for line in attempt['text'].splitlines():
+                    norm_line = self._normalize_ocr_line(line)
+                    if norm_line:
+                        candidate_lines.append(norm_line)
+
+            if candidate_lines:
+                best_ratio = 0.0
+                best_line = None
+                for line in candidate_lines:
+                    ratio = difflib.SequenceMatcher(None, line.lower(), target_lower).ratio()
+                    if ratio > best_ratio:
+                        best_ratio, best_line = ratio, line
+                    if eval_match(line):
+                        elapsed = (time.time()-start_time)*1000
+                        print(f"  ✅ Line match: '{line}' ({elapsed:.1f}ms)")
+                        return True
+                print(f"  [OCR] Best line candidate='{best_line}' ratio={best_ratio:.2f}")
+                if condition.comparator in ('similar','contains') and best_ratio >= 0.85:
+                    print("  ✅ Accepted via best line similarity >=0.85")
+                    return True
+
+            # 1. Check full attempt strings
+            for attempt in ocr_attempts:
+                if eval_match(attempt['text']):
+                    elapsed = (time.time()-start_time)*1000
+                    print(f"  ✅ Match via variant={attempt['variant']} psm={attempt['psm']} ({elapsed:.1f}ms)")
+                    return True
+
+            # 2. Check combined text
+            if combined_text and eval_match(combined_text):
+                elapsed = (time.time()-start_time)*1000
+                print(f"  ✅ Match in combined OCR text ({elapsed:.1f}ms)")
+                return True
+
+            # 3. Check tokens individually and joined
+            if tokens:
+                for tok in tokens:
+                    if eval_match(tok):
+                        elapsed = (time.time()-start_time)*1000
+                        print(f"  ✅ Match via token '{tok}' ({elapsed:.1f}ms)")
+                        return True
+                joined_tokens = " ".join(tokens)
+                if eval_match(joined_tokens):
+                    elapsed = (time.time()-start_time)*1000
+                    print(f"  ✅ Match via joined tokens ({elapsed:.1f}ms)")
+                    return True
+
+            # 4. Fuzzy matching across attempts (SequenceMatcher ratio)
+            for attempt in ocr_attempts:
+                ratio = difflib.SequenceMatcher(None, attempt['text'].lower(), target_lower).ratio()
+                print(f"  [OCR] Attempt fuzzy ratio ({attempt['variant']}|psm {attempt['psm']}): {ratio:.2f}")
+                if condition.comparator in ('similar', 'contains') and ratio >= 0.8:
+                    elapsed = (time.time()-start_time)*1000
+                    print(f"  ✅ Accepted via fuzzy ratio >= 0.8 ({elapsed:.1f}ms)")
+                    return True
+
+            # Export debug images if nothing found
+            if not detected_any:
+                self._export_ocr_debug_images(preprocessed_variants, condition, target_text)
+                elapsed = (time.time()-start_time)*1000
+                print(f"  � Exported OCR debug images for inspection. Total {elapsed:.1f}ms")
+            return False
+
         except Exception as e:
             print(f"  ❌ OCR error: {e}")
             import traceback
             traceback.print_exc()
             return False
-        
-        return False
+
+    # --------------- OCR helper methods ---------------
+    def _preprocess_for_ocr(self, img: np.ndarray) -> Dict[str, np.ndarray]:
+        """Generate multiple preprocessed variants to maximize OCR success."""
+        variants: Dict[str, np.ndarray] = {}
+
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        variants['gray'] = gray
+
+        # Adaptive threshold (handles varying backgrounds)
+        adapt = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                      cv2.THRESH_BINARY, 31, 9)
+        variants['adaptive'] = adapt
+
+        # OTSU (normal + inverted)
+        _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        variants['otsu'] = otsu
+        variants['otsu_inv'] = cv2.bitwise_not(otsu)
+
+        # Morphological enhancement
+        kernel = np.ones((2, 2), np.uint8)
+        dilated = cv2.dilate(otsu, kernel, iterations=1)
+        eroded = cv2.erode(otsu, kernel, iterations=1)
+        variants['dilated'] = dilated
+        variants['eroded'] = eroded
+
+        # Contrast Limited Adaptive Histogram Equalization (CLAHE)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        cl = clahe.apply(gray)
+        _, cl_bin = cv2.threshold(cl, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        variants['clahe'] = cl
+        variants['clahe_bin'] = cl_bin
+
+        # Enlarged (upsample) for small fonts
+        h, w = gray.shape[:2]
+        if max(h, w) < 200:
+            scale = 2
+            enlarged = cv2.resize(gray, (w*scale, h*scale), interpolation=cv2.INTER_CUBIC)
+            variants['enlarged'] = enlarged
+
+        # Enhanced variant (best guess for token parsing)
+        variants['enhanced'] = variants.get('adaptive', gray)
+        return variants
+
+    def _ocr_tokens(self, img: np.ndarray) -> List[str]:
+        """Extract individual word tokens using image_to_data for more granular matching."""
+        try:
+            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, config='--psm 6 --oem 3')
+            words = []
+            for i, txt in enumerate(data.get('text', [])):
+                if txt and txt.strip():
+                    words.append(txt.strip())
+            return words
+        except Exception as e:
+            print(f"  ⚠️ Token OCR failure: {e}")
+            return []
+
+    def _derive_whitelist(self, target: str) -> str:
+        """Attempt to derive a whitelist of characters if target text is restrictive (digits, hex, etc.)."""
+        if not target:
+            return ""
+        unique = set(target)
+        # If alphanumeric set is small (<15) we can whitelist to reduce noise
+        if len(unique) < 15:
+            allowed = ''.join(sorted(ch for ch in unique if ch.isalnum() or ch in '-_:+/'))
+            return allowed
+        return ""
+
+    # --- NEW helpers for line normalization & quick token extraction ---
+    def _normalize_ocr_line(self, line: str) -> str:
+        """Reduce noise in a single OCR line (strip artifacts, collapse repeats)."""
+        if not line:
+            return ""
+        # Remove zero-width / unusual quotes, unify quotes
+        line = line.replace('’', "'").replace('‘', "'").replace('“', '"').replace('”', '"')
+        # Strip non-printable
+        line = ''.join(ch for ch in line if ch in string.printable)
+        # Collapse 3+ repeated same letters that often arise from anti-aliasing (e.g. tttteeee)
+        line = re.sub(r'(\w)\1{2,}', r'\1\1', line)
+        # Remove isolated punctuation clusters
+        line = re.sub(r'[^A-Za-z0-9]+', ' ', line)
+        line = ' '.join(line.split())
+        return line.strip()
+
+    def _extract_tokens_from_text(self, text: str) -> List[str]:
+        """Fast token extraction from a raw OCR block used for early exits."""
+        if not text:
+            return []
+        # Split on non-alphanumeric boundaries, filter short noise (<2 chars unless digit)
+        raw = re.split(r'[^A-Za-z0-9]+', text)
+        tokens = [t for t in raw if (len(t) > 1 or t.isdigit())]
+        # De-duplicate preserving order
+        seen = set()
+        ordered: List[str] = []
+        for t in tokens:
+            tl = t.lower()
+            if tl not in seen:
+                seen.add(tl)
+                ordered.append(t)
+        return ordered
+
+    def _export_ocr_debug_images(self, variants: Dict[str, np.ndarray], condition: Condition, target_text: str):
+        """Save variant images to a debug folder for manual inspection."""
+        try:
+            debug_root = Path('logs') / 'ocr_debug'
+            debug_root.mkdir(parents=True, exist_ok=True)
+            timestamp = time.strftime('%Y%m%d_%H%M%S')
+            base = f"ocr_{timestamp}_pos_{'_'.join(map(str, condition.position))}_target_{self._slugify(target_text)[:30]}"
+            for name, img in variants.items():
+                out_path = debug_root / f"{base}_{name}.png"
+                try:
+                    if len(img.shape) == 2:
+                        cv2.imwrite(str(out_path), img)
+                    else:
+                        cv2.imwrite(str(out_path), cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                except Exception as inner_e:
+                    print(f"  ⚠️ Failed to save debug image {name}: {inner_e}")
+        except Exception as e:
+            print(f"  ⚠️ Failed exporting OCR debug images: {e}")
+
+    def _slugify(self, text: str) -> str:
+        return ''.join(ch if ch.isalnum() else '_' for ch in text)
     
     def evaluate_condition(self, condition: Condition) -> bool:
         """
@@ -299,53 +568,50 @@ class DetectionEngine:
         return channel_match or euclidean_match
     
     def _text_similar(self, text1: str, text2: str, threshold: float = 0.7) -> bool:
+        """Heuristic similarity between OCR text and target.
+
+        Steps:
+          1. Normalize whitespace & case.
+          2. Exact & containment checks.
+          3. Word-level Jaccard similarity.
+          4. Character overlap ratio.
+          5. Return True if max(word, char) >= threshold (env override ADV_OCR_SIM_THRESHOLD).
         """
-        Check if two text strings are similar using improved word and character comparison.
-        
-        Args:
-            text1: First text string
-            text2: Second text string
-            threshold: Similarity threshold (0.0 to 1.0)
-            
-        Returns:
-            True if texts are similar above threshold
-        """
+        # Dynamic threshold override
+        env_thr = os.environ.get('ADV_OCR_SIM_THRESHOLD')
+        if env_thr:
+            try:
+                threshold = float(env_thr)
+            except ValueError:
+                pass
+
         if not text1 or not text2:
             return False
-            
-        # Convert to lowercase and remove extra whitespace
+
         text1_clean = ' '.join(text1.lower().split())
         text2_clean = ' '.join(text2.lower().split())
-        
-        # Check exact match
+
+        if not text1_clean or not text2_clean:
+            return False
+
         if text1_clean == text2_clean:
             return True
-            
-        # Check if one text contains the other
         if text1_clean in text2_clean or text2_clean in text1_clean:
             return True
-            
-        # Calculate similarity based on common words
+
         words1 = set(text1_clean.split())
         words2 = set(text2_clean.split())
-        
-        # Handle empty strings
         if not words1 or not words2:
             return False
-            
-        # Calculate Jaccard similarity: intersection over union
-        intersection = words1.intersection(words2)
-        union = words1.union(words2)
-        
-        word_similarity = len(intersection) / len(union) if union else 0
-        
-        # Also calculate character overlap ratio as backup
+
+        intersection = words1 & words2
+        union = words1 | words2
+        word_similarity = len(intersection) / len(union) if union else 0.0
+
         common_chars = sum(1 for c in text1_clean if c in text2_clean)
         max_length = max(len(text1_clean), len(text2_clean))
-        char_similarity = common_chars / max_length if max_length else 0
-        
-        # Use the better of the two scores
+        char_similarity = common_chars / max_length if max_length else 0.0
+
         similarity = max(word_similarity, char_similarity)
         print(f"  📊 Text similarity score: {similarity:.2f} (threshold: {threshold})")
-        
         return similarity >= threshold

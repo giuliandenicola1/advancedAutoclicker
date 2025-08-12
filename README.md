@@ -29,6 +29,8 @@ Monitoring & logs tab:
 ## Project Layout (Essentials)
 - `modern_main.py` – Packaged entrypoint (used by PyInstaller)
 - `new_ui.py` – Modern modular UI (mixins in `ui_*.py` files)
+- `version.py` – Single source of truth for app semantic version
+- `scripts/bump_version.py` – Helper to bump & optionally tag new versions
 - `clicker.py` – Core clicking logic
 - `detection.py` / `monitor.py` – Condition evaluation & monitoring helpers
 - `logger.py` – Centralized multi-file logging + heartbeat
