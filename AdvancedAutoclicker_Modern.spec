@@ -10,6 +10,9 @@ import platform
 from pathlib import Path
 import os
 
+# Stable bundle identifier for macOS (used by TCC permissions & caching)
+BUNDLE_ID = 'com.giuliandenicola.advancedautoclicker'
+
 project_root = Path(os.getcwd())
 icon_dir = project_root / "build" / "icons"
 icns_icon = icon_dir / "advanced_autoclicker.icns"
@@ -69,5 +72,5 @@ if platform.system() == 'Darwin':
         coll,
         name='Advanced Autoclicker.app',
         icon=chosen_icon or None,
-        bundle_identifier=None,
+        bundle_identifier=BUNDLE_ID,
     )

@@ -12,7 +12,7 @@ Recent notable changes:
 Use bump_version.py to update this file instead of manual edits when possible.
 """
 
-__version__ = "2.0.0"
+__version__ = "0.5.0"
 
 def get_version() -> str:
     """Return current application version."""

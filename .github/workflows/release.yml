@@ -12,46 +12,42 @@ on:
         default: true
         type: boolean
       tag:
-        description: 'Tag to build/release (e.g. v1.0.0). For manual test builds, leave empty.'
+        description: 'Tag to build/release (e.g. v1.0.0). Leave empty for ad-hoc build.'
         required: false
-      permissions:
-        contents: write
 
 jobs:
   build-macos:
     runs-on: macos-latest
-    # Allow manual (workflow_dispatch) builds without tags; still run on tag pushes.
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
-
-      - name: Generate icons (.icns and .ico)
+      - name: Extract version
+        id: mac_ver
         run: |
-          python scripts/make_app_icons.py
-
+          PY_VERSION=$(python -c "import re, pathlib; p=pathlib.Path('version.py');print(re.search(r'__version__\s*=\s*\"([^\"]+)\"', p.read_text()).group(1))")
+          echo "version=$PY_VERSION" >> $GITHUB_OUTPUT
+      - name: Generate icons
+        run: python scripts/make_app_icons.py
       - name: Build app (PyInstaller)
+        run: pyinstaller --noconfirm AdvancedAutoclicker_Modern.spec
+      - name: Show bundle identifier
         run: |
-          pyinstaller --noconfirm AdvancedAutoclicker_Modern.spec
-
+          INFO_PLIST="dist/Advanced Autoclicker.app/Contents/Info.plist"; if [ -f "$INFO_PLIST" ]; then /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO_PLIST"; else echo 'Missing Info.plist'; fi
       - name: Create DMG
-        run: |
-          bash scripts/create_dmg.sh
-
-      - name: Archive artifacts
+        run: bash scripts/create_dmg.sh
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-artifacts
@@ -67,31 +63,29 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
-
-      - name: Generate icons (.icns and .ico)
+      - name: Extract version
+        id: win_ver
+        shell: pwsh
         run: |
-          python scripts/make_app_icons.py
-
+          $v = (Get-Content version.py) -join "`n" | ForEach-Object { if ($_ -match '__version__\s*=\s*"([^"]+)"') { $Matches[1] } }
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+      - name: Generate icons
+        run: python scripts/make_app_icons.py
       - name: Build app (PyInstaller)
-        run: |
-          pyinstaller --noconfirm AdvancedAutoclicker_Modern.spec
-
+        run: pyinstaller --noconfirm AdvancedAutoclicker_Modern.spec
       - name: Zip distribution
-        run: |
-          Compress-Archive -Path "dist/Advanced Autoclicker" -DestinationPath "dist/AdvancedAutoclicker-Windows.zip"
-
-      - name: Archive artifacts
+        shell: pwsh
+        run: Compress-Archive -Path "dist/Advanced Autoclicker" -DestinationPath "dist/AdvancedAutoclicker-Windows.zip"
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-artifacts
@@ -102,9 +96,6 @@ jobs:
   create-release:
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
-    # Only create a release when:
-    # - a tag push triggers the workflow, OR
-    # - a manual run provides a tag AND explicitly disables build_only.
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.tag != '' && inputs.build_only != true)
     steps:
       - name: Download macOS artifacts
@@ -112,28 +103,29 @@ jobs:
         with:
           name: macos-artifacts
           path: macos
-
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
           name: windows-artifacts
           path: windows
-
+      - name: Determine tag
+        id: tagmeta
+        run: |
+          if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then TAG_NAME="${GITHUB_REF#refs/tags/}"; else TAG_NAME="${{ inputs.tag }}"; fi
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
       - name: Generate checksums
         run: |
           echo "Checksums:" > CHECKSUMS.txt
-          if [ -f "macos/AdvancedAutoclicker-macOS.dmg" ]; then
-            shasum -a 256 "macos/AdvancedAutoclicker-macOS.dmg" >> CHECKSUMS.txt
-          fi
+          if [ -f "macos/AdvancedAutoclicker-macOS.dmg" ]; then shasum -a 256 "macos/AdvancedAutoclicker-macOS.dmg" >> CHECKSUMS.txt; fi
           find windows -maxdepth 6 -type f -name '*.exe' -print0 | xargs -0 shasum -a 256 >> CHECKSUMS.txt || true
           find windows -maxdepth 3 -type f -name 'AdvancedAutoclicker-Windows.zip' -print0 | xargs -0 shasum -a 256 >> CHECKSUMS.txt || true
           cat CHECKSUMS.txt
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name || inputs.tag }}
-          name: Advanced Autoclicker ${{ github.ref_name || inputs.tag }}
+          tag_name: ${{ steps.tagmeta.outputs.tag_name }}
+          name: Advanced Autoclicker ${{ steps.tagmeta.outputs.tag_name }}
           draft: false
           prerelease: false
           files: |

@@ -13,6 +13,9 @@ import platform
 from pathlib import Path
 import os
 
+# Stable bundle identifier for macOS bundle; ensure it matches other variants
+BUNDLE_ID = 'com.giuliandenicola.advancedautoclicker'
+
 # When PyInstaller executes the spec, __file__ may not be defined. Use CWD.
 project_root = Path(os.getcwd())
 icon_dir = project_root / "build" / "icons"
@@ -72,5 +75,5 @@ if platform.system() == 'Darwin':
         coll,
         name='Modern Autoclicker.app',
         icon=chosen_icon or None,
-        bundle_identifier=None,
+        bundle_identifier=BUNDLE_ID,
     )

@@ -135,6 +135,42 @@ class UIMonitoringMixin:
             messagebox.showerror("No Conditions", "Please add at least one condition before starting monitoring.")
             return
 
+        # --- macOS permission / environment quick preflight (only runs once per session) ---
+        if not hasattr(self, '_monitor_preflight_done'):
+            self._monitor_preflight_done = True
+            try:
+                import sys  # type: ignore
+                import pyautogui  # type: ignore
+                # Try a tiny size / screen query – these are the first things that fail without permissions
+                sz = pyautogui.size()
+                ok = True
+                try:
+                    img = pyautogui.screenshot(region=(0, 0, min(4, sz[0]), min(4, sz[1])))
+                    if img is None:
+                        ok = False
+                except Exception as shot_err:
+                    ok = False
+                    shot_exc = shot_err
+                if not ok and sys.platform == 'darwin':
+                    # Provide user guidance BEFORE proceeding so they know why start will fail silently later
+                    guidance = (
+                        "Screen capture failed – likely missing permissions.\n\n"
+                        "Grant BOTH: System Settings > Privacy & Security >\n"
+                        "  • Screen Recording\n  • Accessibility\n\n"
+                        "Then re-launch the app (after fully quitting). If you are running from the DMG, copy the app to /Applications first."
+                    )
+                    try:
+                        self.logger.log_error(f"Preflight screen capture failed: {shot_exc}", "monitoring")  # type: ignore
+                    except Exception:
+                        pass
+                    messagebox.showerror("Permissions Required", guidance)
+                    return
+            except Exception as e:  # Non-fatal; just log
+                try:
+                    self.logger.log_warning(f"Preflight permission check warning: {e}", "monitoring")
+                except Exception:
+                    pass
+
         # Early diagnostic log
         try:
             self.logger.log_action("START_MONITORING_ATTEMPT", {
