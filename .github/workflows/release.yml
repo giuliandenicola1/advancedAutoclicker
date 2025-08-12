@@ -14,6 +14,8 @@ on:
       tag:
         description: 'Tag to build/release (e.g. v1.0.0). For manual test builds, leave empty.'
         required: false
+      permissions:
+        contents: write
 
 jobs:
   build-macos:
