@@ -41,7 +41,9 @@ jobs:
       - name: Generate icons
         run: python scripts/make_app_icons.py
       - name: Build app (PyInstaller)
-        run: pyinstaller --noconfirm AdvancedAutoclicker_Modern.spec
+        env:
+          ACLICKER_PREFLIGHT: light
+        run: python -m PyInstaller --noconfirm AdvancedAutoclicker_Modern.spec
       - name: Show bundle identifier
         run: |
           INFO_PLIST="dist/Advanced Autoclicker.app/Contents/Info.plist"; if [ -f "$INFO_PLIST" ]; then /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO_PLIST"; else echo 'Missing Info.plist'; fi
@@ -81,7 +83,9 @@ jobs:
       - name: Generate icons
         run: python scripts/make_app_icons.py
       - name: Build app (PyInstaller)
-        run: pyinstaller --noconfirm AdvancedAutoclicker_Modern.spec
+        env:
+          ACLICKER_PREFLIGHT: light
+        run: python -m PyInstaller --noconfirm AdvancedAutoclicker_Modern.spec
       - name: Zip distribution
         shell: pwsh
         run: Compress-Archive -Path "dist/Advanced Autoclicker" -DestinationPath "dist/AdvancedAutoclicker-Windows.zip"
