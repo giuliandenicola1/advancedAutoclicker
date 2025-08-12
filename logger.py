@@ -26,13 +26,26 @@ class AutoclickerLogger:
             if system == "Darwin":
                 base = Path.home() / "Library" / "Logs" / "AdvancedAutoclicker"
             elif system == "Windows":
-                base = Path(os.environ.get("APPDATA", Path.home())) / "AdvancedAutoclicker" / "logs"
+                # Prefer APPDATA, fallback to LOCALAPPDATA, then home
+                appdata = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA") or str(Path.home())
+                base = Path(appdata) / "AdvancedAutoclicker" / "logs"
             else:
                 base = Path.home() / ".advanced_autoclicker" / "logs"
             self.log_dir = base
         else:
             self.log_dir = Path(log_dir)
-        self.log_dir.mkdir(exist_ok=True)
+        # Ensure directory tree; fallback locally if creation fails (e.g., permission/path issues)
+        try:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            fallback = Path.cwd() / "logs"
+            try:
+                fallback.mkdir(parents=True, exist_ok=True)
+                self.log_dir = fallback
+                # can't log yet; will log once logger initialized
+            except Exception:
+                # As last resort use current working directory without subfolder
+                self.log_dir = Path.cwd()
 
         # File paths
         self.main_log_file = self.log_dir / "autoclicker.log"

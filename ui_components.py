@@ -299,54 +299,53 @@ class UIComponentsMixin:
         self.on_type_change()
         
     def create_conditions_display(self, parent):
-        """Create responsive conditions and groups display."""
+        """Create responsive conditions + groups display (unified tree)."""
         conditions_frame = ttk.LabelFrame(parent, text="Conditions and Groups", padding=(4, 2))  # Reduced padding
-        conditions_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=3)  # Reduced pady
+        conditions_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=3)
         conditions_frame.columnconfigure(0, weight=1)
         conditions_frame.rowconfigure(0, weight=1)
 
-        # Create unified tree view with full width
+        # Container
         tree_container = ttk.Frame(conditions_frame)
-        tree_container.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=2, pady=2)  # Reduced padx/pady
+        tree_container.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=2, pady=2)
         tree_container.columnconfigure(0, weight=1)
         tree_container.rowconfigure(0, weight=1)
 
+        # Treeview
         self.unified_tree = ttk.Treeview(
-            tree_container, 
-            columns=('type', 'details', 'logic'), 
-            show='tree headings', 
-            height=5  # Reduced height from 6 to 5
+            tree_container,
+            columns=("type", "details", "logic"),
+            show="tree headings",
+            height=5,
         )
-        self.unified_tree.heading('#0', text='', anchor='w')
-        self.unified_tree.heading('type', text='Type', anchor='w')
-        self.unified_tree.heading('details', text='Details', anchor='w')
-        self.unified_tree.heading('logic', text='Logic', anchor='w')
-        self.unified_tree.column('#0', width=40, minwidth=30)
-        self.unified_tree.column('type', width=120, minwidth=80)
-        self.unified_tree.column('details', width=350, minwidth=200)
-        self.unified_tree.column('logic', width=100, minwidth=60)
+        self.unified_tree.heading("#0", text="", anchor="w")
+        self.unified_tree.heading("type", text="Type", anchor="w")
+        self.unified_tree.heading("details", text="Details", anchor="w")
+        self.unified_tree.heading("logic", text="Logic", anchor="w")
+        self.unified_tree.column("#0", width=40, minwidth=30)
+        self.unified_tree.column("type", width=120, minwidth=80)
+        self.unified_tree.column("details", width=350, minwidth=200)
+        self.unified_tree.column("logic", width=100, minwidth=60)
 
-        # Scrollbars for tree
-        v_scrollbar = ttk.Scrollbar(tree_container, orient="vertical", 
-                                   command=self.unified_tree.yview)
-        h_scrollbar = ttk.Scrollbar(tree_container, orient="horizontal", 
-                                   command=self.unified_tree.xview)
-        self.unified_tree.configure(yscrollcommand=v_scrollbar.set, 
-                                   xscrollcommand=h_scrollbar.set)
-        
-        # Grid the tree and scrollbars
+        # Scrollbars
+        v_scroll = ttk.Scrollbar(tree_container, orient="vertical", command=self.unified_tree.yview)
+        h_scroll = ttk.Scrollbar(tree_container, orient="horizontal", command=self.unified_tree.xview)
+        self.unified_tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+
         self.unified_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
-        h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        v_scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        h_scroll.grid(row=1, column=0, sticky=(tk.W, tk.E))
 
-        # Context menu for tree
+        # Context menu + bindings
         self.tree_context_menu = tk.Menu(self.unified_tree, tearoff=0)
         self.unified_tree.bind("<Button-3>", self.show_tree_context_menu)
+        self.unified_tree.bind("<Button-2>", self.show_tree_context_menu)  # some macOS builds
+        self.unified_tree.bind("<Control-Button-1>", self.show_tree_context_menu)  # macOS ctrl-click
         self.unified_tree.bind("<Double-1>", self.on_tree_item_double_click)
 
-        # Backward-compatibility hidden widgets
+        # Hidden legacy widgets (compatibility with other mixins)
         self.conditions_listbox = tk.Listbox()
-        self.groups_listbox = ttk.Treeview(columns=('name', 'logic', 'conditions'))
+        self.groups_listbox = ttk.Treeview(columns=("name", "logic", "conditions"))
         
     def create_settings_section(self):
         """Create expanded settings section with click position and logic."""
