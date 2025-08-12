@@ -51,7 +51,8 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=[chosen_icon],
+    # Only set icon when a valid file exists to avoid PyInstaller CopyIcons errors on Windows.
+    icon=(chosen_icon or None),
 )
 coll = COLLECT(
     exe,
