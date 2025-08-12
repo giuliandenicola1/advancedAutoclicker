@@ -135,13 +135,29 @@ class UIMonitoringMixin:
             messagebox.showerror("No Conditions", "Please add at least one condition before starting monitoring.")
             return
 
+        # Early diagnostic log
+        try:
+            self.logger.log_action("START_MONITORING_ATTEMPT", {
+                "standalone_conditions": len(self.conditions),
+                "group_count": len(self.condition_groups),
+                "total_conditions": total_conditions,
+                "has_selected_click_position": bool(self.selected_click_position)
+            }, success=True)
+        except Exception:
+            pass
+
         # Reset click counter for new monitoring session
         self.click_count = 0
         self.update_monitor_display()
 
         # Require explicit click position selection
         if not self.selected_click_position:
-            messagebox.showerror("Click Position Required", "Please set the Click Position before starting monitoring.")
+            # Provide more guidance in packaged builds where users may confuse a condition position vs click position.
+            messagebox.showerror(
+                "Click Position Required",
+                "You must set the global Click Position (where the automated click occurs).\n\n"
+                "Tip: Use the 'Set Click Position' control in the Settings/Configuration tab."
+            )
             return
         click_pos = self.selected_click_position
 
@@ -164,7 +180,19 @@ class UIMonitoringMixin:
         self.monitor = ScreenMonitor(self.config)
         self.monitor.set_rule_matched_callback(self.on_rule_matched)
 
-        if self.monitor.start_monitoring():
+        started = False
+        try:
+            started = self.monitor.start_monitoring()
+        except Exception as e:
+            # Log unexpected start failure
+            try:
+                self.logger.log_error(f"Exception starting monitor: {e}", "monitoring")
+            except Exception:
+                pass
+            messagebox.showerror("Monitor Error", f"Exception starting monitor: {e}")
+            return
+
+        if started:
             self.start_monitor_button.config(state='disabled')
             self.start_button.config(state='disabled') if hasattr(self, 'start_button') else None
             self.stop_monitor_button.config(state='normal')
@@ -186,7 +214,24 @@ class UIMonitoringMixin:
                 "click_position": click_pos
             }, success=True)
         else:
-            messagebox.showerror("Monitor Error", "Failed to start monitoring. Check your configuration.")
+            # Provide detailed diagnostics when start fails silently
+            diag = {
+                "is_monitoring_flag": getattr(self, 'monitor', None).is_monitoring if getattr(self, 'monitor', None) else None,
+                "rules_in_config": len(self.config.rules) if hasattr(self.config, 'rules') else 'n/a',
+                "rule_click_pos": getattr(self.config.rules[0], 'click_position', None) if getattr(self, 'config', None) and self.config.rules else None
+            }
+            try:
+                self.logger.log_action("START_MONITORING_FAILED", diag, success=False)
+            except Exception:
+                pass
+            messagebox.showerror(
+                "Monitor Error",
+                "Failed to start monitoring.\n\nDiagnostics:" \
+                f"\n  is_monitoring={diag['is_monitoring_flag']}" \
+                f"\n  rules={diag['rules_in_config']}" \
+                f"\n  click_pos={diag['rule_click_pos']}" \
+                "\n\nConfirm you granted Screen Recording & Accessibility permissions on macOS."
+            )
         
     def stop_monitoring(self):
         """Stop the autoclicker monitoring"""
