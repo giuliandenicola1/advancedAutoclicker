@@ -16,9 +16,9 @@ icns_icon = icon_dir / "advanced_autoclicker.icns"
 ico_icon = icon_dir / "advanced_autoclicker.ico"
 
 if platform.system() == 'Windows':
-    chosen_icon = str(ico_icon) if ico_icon.exists() else ''
+    chosen_icon = str(ico_icon) if ico_icon.is_file() else None
 else:
-    chosen_icon = str(icns_icon) if icns_icon.exists() else ''
+    chosen_icon = str(icns_icon) if icns_icon.is_file() else None
 
 a = Analysis(
     [str(project_root / 'modern_main.py')],
